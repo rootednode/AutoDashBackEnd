@@ -4,6 +4,39 @@ import { performance } from "perf_hooks";
 const INJ_RATED_CC  = 360;
 const INJ_RATED_PSI = 43.5;
 
+const DEADTIME_CURVE = [
+  [8.0,  1.467],
+  [10.0, 1.070],
+  [12.0, 0.846],
+  [14.0, 0.694],
+  [15.0, 0.643],
+  [16.0, 0.595],
+];
+
+function computeFuelGPH(pw_ms, rpm, fuelRailPsi, mapKpa, volts) {
+  if (!Number.isFinite(pw_ms) || !Number.isFinite(rpm) || rpm <= 0) {
+    return 0;
+  }
+
+  const deadtimeMs = injectorDeadtimeMs(volts);
+  const fuelPwMs = Math.max(0, pw_ms - deadtimeMs);
+
+  if (fuelPwMs <= 0) return 0;
+
+  const deltaPsi = injectorDeltaPsi(fuelRailPsi, mapKpa);
+  const injectorCc = injectorFlowAtPressureCcMin(deltaPsi);
+
+  const numInjectors = 4;
+  const squirtsPerCycle = 2; // verify this matches your MS setup
+
+  const duty = (fuelPwMs * rpm * squirtsPerCycle) / 120000;
+
+  const ccMin = injectorCc * duty * numInjectors;
+  const gph = (ccMin * 60) / 3785.41;
+
+  return Number.isFinite(gph) && gph > 0 ? gph : 0;
+}
+
 function injectorFlowAtPressureCcMin(fuelPsi) {
   if (!Number.isFinite(fuelPsi) || fuelPsi < 20) return INJ_RATED_CC;
   const psi = Math.max(20, Math.min(80, fuelPsi));
@@ -39,7 +72,11 @@ try {
 
 
 
+let averageMPG = 0;
+let histMPG = 0;
 
+let tripMiles = 0;
+let tripGallons = 0;
 
 let lastValidMpg = 0;
 
@@ -59,51 +96,73 @@ function computeFuelCCPerMin(pw_ms, rpm) {
 
 
 
-function computeMPG(pw_ms, rpm, mph, fuelPsi) {
+function injectorDeadtimeMs(volts) {
+  if (!Number.isFinite(volts)) return 0.694;
 
-	//console.log(pw_ms, rpm, mph);
+  if (volts <= DEADTIME_CURVE[0][0]) return DEADTIME_CURVE[0][1];
 
+  for (let i = 0; i < DEADTIME_CURVE.length - 1; i++) {
+    const [v1, dt1] = DEADTIME_CURVE[i];
+    const [v2, dt2] = DEADTIME_CURVE[i + 1];
+
+    if (volts >= v1 && volts <= v2) {
+      const t = (volts - v1) / (v2 - v1);
+      return dt1 + t * (dt2 - dt1);
+    }
+  }
+
+  return DEADTIME_CURVE[DEADTIME_CURVE.length - 1][1];
+}
+
+function injectorDeltaPsi(fuelRailPsi, mapKpa) {
+  if (!Number.isFinite(fuelRailPsi) || fuelRailPsi < 10) {
+    return INJ_RATED_PSI;
+  }
+
+  // If fuel pressure sensor reads rail gauge pressure,
+  // convert to injector differential pressure.
+  const manifoldGaugePsi = (mapKpa - 101.325) * 0.145038;
+  const deltaPsi = fuelRailPsi - manifoldGaugePsi;
+
+  return Math.max(20, Math.min(80, deltaPsi));
+}
+
+function computeMPG(pw_ms, rpm, mph, fuelRailPsi, mapKpa, volts) {
   if (!Number.isFinite(pw_ms) || !Number.isFinite(rpm) || !Number.isFinite(mph)) {
-    return { mpg: lastValidMpg, avg: historicalAvgMpg };
+    return lastValidMpg;
   }
 
   if (mph < 2) {
     lastValidMpg = 0;
-    return { mpg: 0, avg: historicalAvgMpg };
+    return 0;
   }
 
-	const injectorCc = injectorFlowAtPressureCcMin(fuelPsi);
+  const deadtimeMs = injectorDeadtimeMs(volts);
+  const fuelPwMs = Math.max(0, pw_ms - deadtimeMs);
+
+  const deltaPsi = injectorDeltaPsi(fuelRailPsi, mapKpa);
+  const injectorCc = injectorFlowAtPressureCcMin(deltaPsi);
 
   const numInjectors = 4;
+  const squirtsPerCycle = 2; // change this if your MS setup is not 2 squirts
 
-  const duty = (pw_ms * rpm) / 120000;
-  if (duty < 1e-6) {
-    return { mpg: lastValidMpg, avg: historicalAvgMpg };
-  }
+  const duty = (fuelPwMs * rpm * squirtsPerCycle) / 120000;
 
-  const ccMin = (injectorCc * duty * numInjectors) * 2;
-  const gph = (ccMin * 60) / 3785;
-  if (gph < 1e-6) {
-    return { mpg: lastValidMpg, avg: historicalAvgMpg };
-  }
+  if (duty < 1e-6) return lastValidMpg;
 
-  //const mpg = (mph * 60) / gph;
-	const mpg = mph / gph;
+  const ccMin = injectorCc * duty * numInjectors;
+  const gph = (ccMin * 60) / 3785.41;
 
-  if (!Number.isFinite(mpg) || mpg <= 0) {
-  	return { mpg: lastValidMpg, avg: historicalAvgMpg };
-  }
+  if (gph < 1e-6) return lastValidMpg;
+
+  const mpg = mph / gph;
+
+  if (!Number.isFinite(mpg) || mpg <= 0) return lastValidMpg;
 
   lastValidMpg = mpg;
-
-  //mpgSum += mpg;
-  ///mpgCount++;
-  //historicalAvgMpg = mpgSum / mpgCount;
-	
-	historicalAvgMpg = historical.totalMiles / historical.totalGallons;
-
-  return { mpg, avg: historicalAvgMpg };
+  return mpg;
 }
+
 
 
 
@@ -210,10 +269,9 @@ const MS_CAN_MAP = {
       { id: DATA_MAP.STATUS2, data: data.readUInt8(1) },
       { id: DATA_MAP.STATUS3, data: data.readUInt8(2) },
       { id: DATA_MAP.STATUS4, data: data.readUInt8(3) },
-      { id: DATA_MAP.STATUS5, data: data.readUInt8(4) },
-      { id: DATA_MAP.STATUS6, data: data.readUInt8(5) },
-      { id: DATA_MAP.STATUS7, data: data.readUInt8(6) },
-      { id: DATA_MAP.STATUS8, data: data.readUInt8(7) },
+      { id: DATA_MAP.STATUS5, data: data.readUInt16BE(4) },
+      { id: DATA_MAP.STATUS6, data: data.readUInt8(6) },
+      { id: DATA_MAP.STATUS7, data: data.readUInt8(7) },
     ];
   },
 
@@ -249,62 +307,90 @@ const MS_CAN_MAP = {
   const mps = (rawSpeed > 0 && rawSpeed < 10000) ? rawSpeed / 10 : 0;
   const mph = mps * 2.23694;
 
-const fuelPsi = lastValues[DATA_MAP.SENSOR2.id] || 0;
+  const fuelPsi = lastValues[DATA_MAP.SENSOR2.id] || 0;
 
-
-
-
-  // --- time delta in seconds ---
+  // ---- time delta ----
   const now = performance.now();
   let dtSeconds = (now - lastVssTime) / 1000;
   lastVssTime = now;
 
-  // guard against weird big/negative dt
-  if (!Number.isFinite(dtSeconds) || dtSeconds < 0 || dtSeconds > 1) {
+  if (!Number.isFinite(dtSeconds) || dtSeconds <= 0 || dtSeconds > 1) {
     dtSeconds = 0;
   }
 
-  // miles per second from mph
-  const milesPerSecond = mph / 3600;
+  // ---- distance ----
+  const milesThisFrame = (mph / 3600) * dtSeconds;
 
-  // per-frame odometer increment based on real time
-  const odoIncrementMiles = milesPerSecond * dtSeconds;
+  historical.totalMiles += milesThisFrame;
+  tripMiles += milesThisFrame;
 
-  // Update lifetime miles
-  historical.totalMiles += odoIncrementMiles;
-
-  // Pull latest PW + RPM
+  // ---- inputs ----
   const pw1 = lastValues[DATA_MAP.PW1.id] || 0;
   const rpm = lastValues[DATA_MAP.RPM.id] || 0;
 
-  // Compute current + trip average MPG
-  //const { mpg: currentMPG, avg: averageMPG } = computeMPG(pw1, rpm, mph);
-const { mpg: currentMPG, avg: averageMPG } =
-  computeMPG(pw1, rpm, mph, fuelPsi);
+  // ---- instant MPG ----
+//	const mapKpa = lastValues[DATA_MAP.MAP.id] || 101.325;
+//	const volts = lastValues[DATA_MAP.VOLT.id] || 14.0;
+//	const currentMPG = computeMPG(pw1, rpm, mph, fuelPsi, mapKpa, volts);
+
+  // ---- fuel integration ----
+	//const mapKpa = lastValues[DATA_MAP.MAP.id] || 101.325;
+	//const volts = lastValues[DATA_MAP.VOLT.id] || 14.0;
+
+//	const gph = computeFuelGPH(pw1, rpm, fuelPsi, mapKpa, volts);
 
 
-  // Update lifetime gallons (time-based, not frame-based)
-  if (mph > 1 && currentMPG > 0 && dtSeconds > 0) {
-    // mph / mpg = gallons per hour
-    const gallonsPerHour = mph / currentMPG;
-    const gallonsThisFrame = gallonsPerHour * (dtSeconds / 3600);
-    historical.totalGallons += gallonsThisFrame;
+
+	const mapKpa = lastValues[DATA_MAP.MAP.id] || 101.325;
+	const volts = lastValues[DATA_MAP.VOLT.id] || 14.0;
+	const gph = computeFuelGPH(pw1, rpm, fuelPsi, mapKpa, volts);
+
+	// ---- instant MPG ----
+	let currentMPG = 0;
+
+	if (mph > 2 && gph > 0) {
+	  currentMPG = mph / gph;
+	  lastValidMpg = currentMPG;
+	} else if (mph > 2) {
+	  currentMPG = lastValidMpg;
+	}
+
+
+	// ---- fuel integration ----
+	if (gph > 0 && dtSeconds > 0) {
+	  const gallonsThisFrame = gph * (dtSeconds / 3600);
+	
+	  historical.totalGallons += gallonsThisFrame;
+	  tripGallons += gallonsThisFrame;
+	}
+
+
+
+//  if (mph > 1 && currentMPG > 0 && dtSeconds > 0) {
+//    const gallonsPerHour = mph / currentMPG;
+//    const gallonsThisFrame = gallonsPerHour * (dtSeconds / 3600);
+
+//    historical.totalGallons += gallonsThisFrame;
+//    tripGallons += gallonsThisFrame;
+//  }
+
+  // ---- averages ----
+  if (tripMiles > 0 && tripGallons > 0) {
+    averageMPG = tripMiles / tripGallons;
   }
 
-  // Compute lifetime MPG
-  let histMPG = 0;
   if (historical.totalMiles > 0 && historical.totalGallons > 0) {
     histMPG = historical.totalMiles / historical.totalGallons;
   }
 
-  // Save occasionally (every 60 VSS frames)
+  // ---- persist history ----
   saveTick++;
   if (saveTick >= 60) {
     saveTick = 0;
     try {
-			if (process.env.TYPE !== "development") {
-      	fs.writeFileSync(HISTORY_FILE, JSON.stringify(historical, null, 2));
-			}
+      if (process.env.TYPE !== "development") {
+        fs.writeFileSync(HISTORY_FILE, JSON.stringify(historical, null, 2));
+      }
     } catch (e) {
       console.error("History save error:", e);
     }
@@ -312,64 +398,13 @@ const { mpg: currentMPG, avg: averageMPG } =
 
   return [
     { id: DATA_MAP.SPEEDO,         data: mph },
-    { id: DATA_MAP.ODOMETER,       data: odoIncrementMiles },
+    { id: DATA_MAP.ODOMETER,       data: milesThisFrame },
     { id: DATA_MAP.CURRENT_MPG,    data: currentMPG },
     { id: DATA_MAP.AVERAGE_MPG,    data: averageMPG },
     { id: DATA_MAP.HISTORICAL_MPG, data: histMPG },
   ];
 },
 
-
-/*
-0x61A: (data) => {
-  const rawSpeed = readS16(data, 0);
-  const mps = (rawSpeed > 0 && rawSpeed < 10000) ? rawSpeed / 10 : 0;
-
-  const mph = mps * 2.23694;
-  const odoIncrementMiles = mph / 3600;
-
-  // Update lifetime miles
-  historical.totalMiles += odoIncrementMiles;
-
-  // Pull latest PW + RPM
-  const pw1 = lastValues[DATA_MAP.PW1.id] || 0;
-  const rpm = lastValues[DATA_MAP.RPM.id] || 0;
-
-  // Compute current + trip average MPG
-  const { mpg: currentMPG, avg: averageMPG } = computeMPG(pw1, rpm, mph);
-
-  // Update lifetime gallons (only when car is really moving)
-  if (mph > 1 && currentMPG > 0) {
-    const gallonsPerSec = (mph / currentMPG) / 3600;
-    historical.totalGallons += gallonsPerSec;
-  }
-
-  // Compute lifetime MPG
-  let histMPG = 0;
-  if (historical.totalMiles > 0 && historical.totalGallons > 0) {
-    histMPG = historical.totalMiles / historical.totalGallons;
-  }
-
-  // Save occasionally (every 60 VSS frames)
-  saveTick++;
-  if (saveTick >= 60) {
-    saveTick = 0;
-    try {
-      fs.writeFileSync(HISTORY_FILE, JSON.stringify(historical, null, 2));
-    } catch(e) {
-      console.error("History save error:", e);
-    }
-  }
-
-  return [
-    { id: DATA_MAP.SPEEDO,         data: mph },
-    { id: DATA_MAP.ODOMETER,       data: odoIncrementMiles },
-    { id: DATA_MAP.CURRENT_MPG,    data: currentMPG },
-    { id: DATA_MAP.AVERAGE_MPG,    data: averageMPG },
-    { id: DATA_MAP.HISTORICAL_MPG, data: histMPG },
-  ];
-},
-*/
 
 
 

@@ -50,6 +50,17 @@ export function initCan() {
   if (ifaceExists("can0")) {
     console.log("[CAN] eth0 down — using real can0");
 
+		try {
+    	run("sudo ip link set can0 down");
+  	} catch {}
+
+  	try {
+    	run("sudo ip link set can0 type can bitrate 500000 restart-ms 100");
+    	run("sudo ip link set can0 up");
+  	} catch (err) {
+    	console.error("[CAN] failed to bring can0 up", err);
+  	}
+
     return {
       iface: "can0",
       simulated: false,
