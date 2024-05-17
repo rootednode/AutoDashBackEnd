@@ -64,7 +64,7 @@ const RACEPACK_CAN_MAP = {
 	},
 
 	0x5F2: (data) => {
-//		console.log('clt', data, data.readInt16BE(0), data.readInt16BE(2), data.readInt16BE(4), data.readInt16BE(6));
+		console.log('clt', data, data.readInt16BE(0), data.readInt16BE(2), data.readInt16BE(4), data.readInt16BE(6));
 
 
 		map = 0;
