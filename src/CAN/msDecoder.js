@@ -1,210 +1,380 @@
 import { DATA_MAP } from "../dataKeys.js";
-
-let pw1 = 0;
-let adv = 0;
-let rpm = 0;
-let clt = 0;
-let map = 0;
-let mat = 0;
-let ego = 0;
-let tps = 0;
-let speed = 0;
-let status1 = 0;
-let status2 = 0;
-let status3 = 0;
-let status4 = 0;
-let status5 = 0;
-let status6 = 0;
-let status7 = 0;
-let status8 = 0;
-
-const RACEPACK_CAN_MAP = {
-
-	0x5F0: (data) => {
-//    		console.log('rpm', data, data.readInt16BE(0), data.readInt16BE(2), data.readInt16BE(4), data.readInt16BE(6));
+import { performance } from "perf_hooks";
 
 
-		pw1 = 0;
-		if ((data.readInt16BE(2) > 0) && (data.readInt16BE(2) < 6000 ))
-		{
-//			console.log('pw1 in range');
-			pw1 = data.readInt16BE(2) / 1000;
-//			pw1 = pw1.toFixed(1);
-		}
-//		console.log('pw1', pw1);
+const lastValues = {};
 
-		rpm = 0;
-		if ((data.readInt16BE(6) > 0) && (data.readInt16BE(6) < 6000 ))
-		{
-//			console.log('rpm in range');
-			rpm = data.readInt16BE(6);
-		}
-//		console.log('rpm', rpm);
+let lastVssTime = performance.now();
 
+let saveTick = 0;
 
+import fs from "fs";
+const HISTORY_FILE = "/home/pi/AutoDashBackEnd/history.json";
 
+let historical = {
+  totalMiles: 0,
+  totalGallons: 0
+};
 
-		return [
-			{ id: DATA_MAP.PW1, data: pw1},
-			{ id: DATA_MAP.RPM, data: rpm},
-		];
-	},
-
-	0x5F1: (data) => {
-
-		adv = 0;
-		if ((data.readInt16BE(0) > 0) && (data.readInt16BE(0) < 6000 ))
-		{
-			adv = data.readInt16BE(0) / 10;
-		}
-
-		return [
-			{ id: DATA_MAP.ADV, data: adv},
-		];
-	},
-
-	0x5F2: (data) => {
-		console.log('clt', data, data.readInt16BE(0), data.readInt16BE(2), data.readInt16BE(4), data.readInt16BE(6));
-
-
-		map = 0;
-		if ((data.readInt16BE(2) > 0) && (data.readInt16BE(2) < 10000 ))
-		{
-			map = data.readInt16BE(2);
-			map = (map / 10);
-		}
-
-		mat = 0;
-		if ((data.readInt16BE(4) > 0) && (data.readInt16BE(4) < 10000 ))
-		{
-			mat = data.readInt16BE(4);
-			mat = (mat / 10);
-		}
-
-		clt = 0;
-		if ((data.readInt16BE(6) > 0) && (data.readInt16BE(6) < 10000 ))
-		{
-			clt = data.readInt16BE(6);
-			clt = (clt / 10);
-		}
-
-//		clt = Math.floor(Math.random() * 10000); 
-
-    	return [
-      		{ id: DATA_MAP.CTS, data: clt },
-      		{ id: DATA_MAP.MAT, data: mat },
-      		{ id: DATA_MAP.MAP, data: map },
-
-    	];
-	},
-
-  	0x5F3: (data) => {
-//   		console.log('tps', data, data.readInt16BE(0), data.readInt16BE(2), data.readInt16BE(4), data.readInt16BE(6));
-
-		tps = 0;
-		if ((data.readInt16BE(0) > 0) && (data.readInt16BE(0) < 10000 ))
-		{
-			tps = data.readInt16BE(0);
-			tps = (tps / 10);
-		}
-
-//		tps = Math.floor(Math.random() * 10000); 
-
-		ego = 0;
-		if ((data.readInt16BE(4) > 0) && (data.readInt16BE(4) < 10000 ))
-		{
-			ego = data.readInt16BE(4);
-			ego = (ego / 10);
-		}
-
-
-    	return [
-      		{ id: DATA_MAP.TPS, data: tps },
-      		{ id: DATA_MAP.EGO, data: ego },
-    	];
-  	},
-
-  	0x5FA: (data) => {
-//   		console.log('tps', data, data.readInt16BE(0), data.readInt16BE(2), data.readInt16BE(4), data.readInt16BE(6));
-
-		//status12 = data.readInt16BE(0);
-		//status23 = data.readInt16BE(2);
-		//status45 = data.readInt16BE(4);
-		status1 = (data.readInt16BE(0) >> 8) & 0xFF;
-		status2 = (data.readInt16BE(0) & 0xFF);
-
-
-
-		status5 = (data.readInt16BE(5) >> 8) & 0xFF;
-		status6 = (data.readInt16BE(5) & 0xFF);
-
-		status7 = (data.readInt16BE(6) >> 8) & 0xFF;
-		status8 = (data.readInt16BE(6) & 0xFF);
-		
-		console.log('s5', status5);
-		console.log('s6', status6);
-		console.log('s7', status7);
-		console.log('s8', status8);
-    	
-		return [
-      		{ id: DATA_MAP.STATUS1, data: status1 },
-      		{ id: DATA_MAP.STATUS2, data: status2 },
-      		{ id: DATA_MAP.STATUS3, data: status3 },
-      		{ id: DATA_MAP.STATUS4, data: status4 },
-      		{ id: DATA_MAP.STATUS5, data: status5 },
-      		{ id: DATA_MAP.STATUS6, data: status6 },
-      		{ id: DATA_MAP.STATUS7, data: status7 },
-      		{ id: DATA_MAP.STATUS8, data: status8 },
-    	];
-  	},
-
-  	0x61A: (data) => {
-//    	console.log('vss', data, data.readInt16BE(0), data.readInt16BE(2), data.readInt16BE(4), data.readInt16BE(6));
-
-		speed = 0;
-		if ((data.readInt16BE(0) > 0) && (data.readInt16BE(0) < 10000 ))
-		{
-			speed = data.readInt16BE(0);
-		}
-
-		
-		// convert from 10ths
-		speed = (speed / 10);
-
-		// convert feet per sec to mph
-		//var speedmph = speed * 0.681818
-		//speedmph = speedmph + (speedmph / 10)
-
-		// convert meters per sec to mph
-		var speedmph = speed * 2.23694;
-
-		//var speedmph = speed / 4
-		//speedmph = speedmph + (speedmph / 10)
-		//speedmph= (speedmph * 2)
-
-    	return [
-      		{ id: DATA_MAP.SPEEDO, data: speedmph },
-        	{ id: DATA_MAP.ODOMETER, data: (speedmph / 3600) },
-    	];	
-  	},
-
+// Load saved file if exists
+try {
+  if (fs.existsSync(HISTORY_FILE)) {
+    const data = JSON.parse(fs.readFileSync(HISTORY_FILE, "utf8"));
+    historical.totalMiles = data.totalMiles || 0;
+    historical.totalGallons = data.totalGallons || 0;
+  }
+} catch(e) {
+  console.error("History load error:", e);
 }
 
-// BIG NOTE:  (note for OpenINverter that uses LE)
-// Double check your ECU stores data Big Endian or Little Endian
-// and use the appropriate method to read the data
-// ex: data.readInt32BE(0) or data.readInt32LE(0)
+
+
+
+
+let lastValidMpg = 0;
+
+// running historical average
+let mpgSum = 0;
+let mpgCount = 0;
+let historicalAvgMpg = 0;
+
+
+function computeFuelCCPerMin(pw_ms, rpm) {
+  const injectorCc = 390;
+  const numInjectors = 4;
+  const duty = (pw_ms * rpm) / 120000;
+  if (duty < 1e-6) return 0;
+  return injectorCc * duty * numInjectors;  // cc/min
+}
+
+
+
+function computeMPG(pw_ms, rpm, mph) {
+
+	console.log(pw_ms, rpm, mph);
+
+  if (!Number.isFinite(pw_ms) || !Number.isFinite(rpm) || !Number.isFinite(mph)) {
+    return { mpg: lastValidMpg, avg: historicalAvgMpg };
+  }
+
+  if (mph < 2) {
+    lastValidMpg = 0;
+    return { mpg: 0, avg: historicalAvgMpg };
+  }
+
+  const injectorCc = 390;
+  const numInjectors = 4;
+
+  const duty = (pw_ms * rpm) / 120000;
+  if (duty < 1e-6) {
+    return { mpg: lastValidMpg, avg: historicalAvgMpg };
+  }
+
+  const ccMin = (injectorCc * duty * numInjectors) * 2;
+  const gph = (ccMin * 60) / 3785;
+  if (gph < 1e-6) {
+    return { mpg: lastValidMpg, avg: historicalAvgMpg };
+  }
+
+  //const mpg = (mph * 60) / gph;
+	const mpg = mph / gph;
+
+  if (!Number.isFinite(mpg) || mpg <= 0) {
+  	return { mpg: lastValidMpg, avg: historicalAvgMpg };
+  }
+
+  lastValidMpg = mpg;
+
+  mpgSum += mpg;
+  mpgCount++;
+  historicalAvgMpg = mpgSum / mpgCount;
+
+  return { mpg, avg: historicalAvgMpg };
+}
+
+
+
+
+
+// SAFE helper for reading signed 16-bit values
+function readS16(data, offset) {
+  return data.readInt16BE(offset);
+}
+
+// SAFE helper for reading unsigned 16-bit values
+function readU16(data, offset) {
+  return data.readUInt16BE(offset);
+}
+
+const MS_CAN_MAP = {
+
+  // -------------------------------------------------------
+  // 0x5F0 : PW1, PW2, RPM
+  // -------------------------------------------------------
+  0x5F0: (data) => {
+    const rawPw = readS16(data, 2);
+    const rawRpm = readS16(data, 6);
+
+    const pw1 = (rawPw > 0 && rawPw < 15000) ? rawPw / 1000 : 0;
+		//const pw1 = (rawPw > 0 && rawPw < 15000) ? (rawPw * 0.064) : 0;
+
+    const rpm = (rawRpm > 0 && rawRpm < 9000) ? rawRpm : 0;
+
+    return [
+      { id: DATA_MAP.PW1, data: pw1 },
+      { id: DATA_MAP.RPM, data: rpm },
+      { id: DATA_MAP.COM, data: 0 },
+    ];
+  },
+
+  // -------------------------------------------------------
+  // 0x5F1 : Advance, Engine state
+  // -------------------------------------------------------
+  0x5F1: (data) => {
+    const rawAdv = readS16(data, 0);
+    const adv = (rawAdv > 0 && rawAdv < 12000) ? rawAdv / 10 : 0;
+
+    //const engine = readS16(data, 3);
+		const engine = data.readUInt8(3);
+
+
+    return [
+      { id: DATA_MAP.ADV, data: adv },
+      { id: DATA_MAP.ENGINE, data: engine },
+    ];
+  },
+
+  // -------------------------------------------------------
+  // 0x5F2 : MAP, MAT, CLT
+  // -------------------------------------------------------
+  0x5F2: (data) => {
+    const rawMap = readS16(data, 2);
+    const rawMat = readS16(data, 4);
+    const rawClt = readS16(data, 6);
+
+    const map = (rawMap > 0 && rawMap < 10000) ? rawMap / 10 : 0;
+    const mat = (rawMat > 0 && rawMat < 10000) ? rawMat / 10 : 0;
+    const clt = (rawClt > 0 && rawClt < 10000) ? Math.floor(rawClt / 10) : 0;
+
+    return [
+      { id: DATA_MAP.MAP, data: map },
+      { id: DATA_MAP.CTS, data: clt },
+      { id: DATA_MAP.MAT, data: mat },
+    ];
+  },
+
+  // -------------------------------------------------------
+  // 0x5F3 : TPS, Battery Voltage
+  // -------------------------------------------------------
+  0x5F3: (data) => {
+    const rawTps = readS16(data, 0);
+    const rawVolt = readS16(data, 2);
+
+    const tps = (rawTps > 0 && rawTps < 10000) ? rawTps / 10 : 0;
+    const volt = (rawVolt > 0 && rawVolt < 10000) ? rawVolt / 10 : 0;
+
+    return [
+      { id: DATA_MAP.TPS, data: tps },
+      { id: DATA_MAP.VOLT, data: volt },
+    ];
+  },
+
+  // -------------------------------------------------------
+  // 0x5F4 : EGO
+  // -------------------------------------------------------
+  0x5F4: (data) => {
+    const egoraw = readU16(data, 2);
+    const ego = egoraw / 10;
+    return [{ id: DATA_MAP.EGO, data: ego }];
+  },
+
+  // -------------------------------------------------------
+  // 0x5FA : STATUS1–8 bitfields
+  // -------------------------------------------------------
+  0x5FA: (data) => {
+    return [
+      { id: DATA_MAP.STATUS1, data: data.readUInt8(0) },
+      { id: DATA_MAP.STATUS2, data: data.readUInt8(1) },
+      { id: DATA_MAP.STATUS3, data: data.readUInt8(2) },
+      { id: DATA_MAP.STATUS4, data: data.readUInt8(3) },
+      { id: DATA_MAP.STATUS5, data: data.readUInt8(4) },
+      { id: DATA_MAP.STATUS6, data: data.readUInt8(5) },
+      { id: DATA_MAP.STATUS7, data: data.readUInt8(6) },
+      { id: DATA_MAP.STATUS8, data: data.readUInt8(7) },
+    ];
+  },
+
+  // -------------------------------------------------------
+  // 0x5FD : Generic Sensors 1–4
+  // -------------------------------------------------------
+  0x5FD: (data) => {
+    const decodeSensor = (offset) => {
+      const raw = readS16(data, offset);
+      return (raw > 0 && raw < 10000) ? Math.floor(raw / 10) : 0;
+    };
+
+    return [
+      { id: DATA_MAP.SENSOR1, data: decodeSensor(0) },
+      { id: DATA_MAP.SENSOR2, data: decodeSensor(2) },
+      { id: DATA_MAP.SENSOR3, data: decodeSensor(4) },
+      { id: DATA_MAP.SENSOR4, data: decodeSensor(6) },
+    ];
+  },
+
+  // -------------------------------------------------------
+  // 0x60F : AFR
+  // -------------------------------------------------------
+  0x60F: (data) => {
+    const raw = data.readUInt8(0);
+    const afr = (raw > 0 && raw < 255) ? raw : 0;
+    return [{ id: DATA_MAP.AFR, data: afr }];
+  },
+
+
+0x61A: (data) => {
+  const rawSpeed = readS16(data, 0);
+  const mps = (rawSpeed > 0 && rawSpeed < 10000) ? rawSpeed / 10 : 0;
+  const mph = mps * 2.23694;
+
+  // --- time delta in seconds ---
+  const now = performance.now();
+  let dtSeconds = (now - lastVssTime) / 1000;
+  lastVssTime = now;
+
+  // guard against weird big/negative dt
+  if (!Number.isFinite(dtSeconds) || dtSeconds < 0 || dtSeconds > 1) {
+    dtSeconds = 0;
+  }
+
+  // miles per second from mph
+  const milesPerSecond = mph / 3600;
+
+  // per-frame odometer increment based on real time
+  const odoIncrementMiles = milesPerSecond * dtSeconds;
+
+  // Update lifetime miles
+  historical.totalMiles += odoIncrementMiles;
+
+  // Pull latest PW + RPM
+  const pw1 = lastValues[DATA_MAP.PW1.id] || 0;
+  const rpm = lastValues[DATA_MAP.RPM.id] || 0;
+
+  // Compute current + trip average MPG
+  const { mpg: currentMPG, avg: averageMPG } = computeMPG(pw1, rpm, mph);
+
+  // Update lifetime gallons (time-based, not frame-based)
+  if (mph > 1 && currentMPG > 0 && dtSeconds > 0) {
+    // mph / mpg = gallons per hour
+    const gallonsPerHour = mph / currentMPG;
+    const gallonsThisFrame = gallonsPerHour * (dtSeconds / 3600);
+    historical.totalGallons += gallonsThisFrame;
+  }
+
+  // Compute lifetime MPG
+  let histMPG = 0;
+  if (historical.totalMiles > 0 && historical.totalGallons > 0) {
+    histMPG = historical.totalMiles / historical.totalGallons;
+  }
+
+  // Save occasionally (every 60 VSS frames)
+  saveTick++;
+  if (saveTick >= 60) {
+    saveTick = 0;
+    try {
+      fs.writeFileSync(HISTORY_FILE, JSON.stringify(historical, null, 2));
+    } catch (e) {
+      console.error("History save error:", e);
+    }
+  }
+
+  return [
+    { id: DATA_MAP.SPEEDO,         data: mph },
+    { id: DATA_MAP.ODOMETER,       data: odoIncrementMiles },
+    { id: DATA_MAP.CURRENT_MPG,    data: currentMPG },
+    { id: DATA_MAP.AVERAGE_MPG,    data: averageMPG },
+    { id: DATA_MAP.HISTORICAL_MPG, data: histMPG },
+  ];
+},
+
+
+/*
+0x61A: (data) => {
+  const rawSpeed = readS16(data, 0);
+  const mps = (rawSpeed > 0 && rawSpeed < 10000) ? rawSpeed / 10 : 0;
+
+  const mph = mps * 2.23694;
+  const odoIncrementMiles = mph / 3600;
+
+  // Update lifetime miles
+  historical.totalMiles += odoIncrementMiles;
+
+  // Pull latest PW + RPM
+  const pw1 = lastValues[DATA_MAP.PW1.id] || 0;
+  const rpm = lastValues[DATA_MAP.RPM.id] || 0;
+
+  // Compute current + trip average MPG
+  const { mpg: currentMPG, avg: averageMPG } = computeMPG(pw1, rpm, mph);
+
+  // Update lifetime gallons (only when car is really moving)
+  if (mph > 1 && currentMPG > 0) {
+    const gallonsPerSec = (mph / currentMPG) / 3600;
+    historical.totalGallons += gallonsPerSec;
+  }
+
+  // Compute lifetime MPG
+  let histMPG = 0;
+  if (historical.totalMiles > 0 && historical.totalGallons > 0) {
+    histMPG = historical.totalMiles / historical.totalGallons;
+  }
+
+  // Save occasionally (every 60 VSS frames)
+  saveTick++;
+  if (saveTick >= 60) {
+    saveTick = 0;
+    try {
+      fs.writeFileSync(HISTORY_FILE, JSON.stringify(historical, null, 2));
+    } catch(e) {
+      console.error("History save error:", e);
+    }
+  }
+
+  return [
+    { id: DATA_MAP.SPEEDO,         data: mph },
+    { id: DATA_MAP.ODOMETER,       data: odoIncrementMiles },
+    { id: DATA_MAP.CURRENT_MPG,    data: currentMPG },
+    { id: DATA_MAP.AVERAGE_MPG,    data: averageMPG },
+    { id: DATA_MAP.HISTORICAL_MPG, data: histMPG },
+  ];
+},
+*/
+
+
+
+
+};
+
+// -------------------------------------------------------
+// MAIN DECODER — 11-bit ID safe
+// -------------------------------------------------------
 const msDecoder = {
-  /**
-   * @param {{ ts: number; id: number; data: Uint8Array; ext: boolean; }} canMsg
-   * @returns {[{id:import("../dataKeys.js").DataMapEntry, data:Number}] | []}
-   */
   do: (canMsg) => {
-    //const decodedId = canMsg.id & 0xfffff800;
-    const decodedId = canMsg.id;
-    if (!!RACEPACK_CAN_MAP[decodedId]) {
-      return RACEPACK_CAN_MAP[decodedId](Buffer.from(canMsg.data.buffer));
-    } else {
+    const decodedId = canMsg.id & 0x7FF; // force 11-bit CAN ID
+
+    const handler = MS_CAN_MAP[decodedId];
+    if (!handler) return [];
+
+    const buf = Buffer.from(canMsg.data);
+
+    try {
+      //return handler(buf) || [];
+			const results = handler(buf) || [];
+			for (const r of results) {
+			  lastValues[r.id.id] = r.data;
+			}
+			return results;
+
+    } catch (err) {
+      console.error("msDecoder error for ID", decodedId.toString(16), err);
       return [];
     }
   },
@@ -212,4 +382,3 @@ const msDecoder = {
 
 export default msDecoder;
 
-// TODO: figure out way of not having to access key each time, (bake it in on init, reduce cycles)

@@ -22,13 +22,13 @@ export default class DataStore {
       this.packetKeys[DATA_MAP.WARNINGS.id].byteOffset + this.packetKeys[DATA_MAP.WARNINGS.id].byteLength
     );
     // we will treat this like a queue FIFO
-    this.averageMPGPoints = new RingBuffer(
+    /*this.averageMPGPoints = new RingBuffer(
       this.buffer.slice(
         this.packetKeys[DATA_MAP.AVERAGE_MPG_POINTS.id].byteOffset,
         this.packetKeys[DATA_MAP.AVERAGE_MPG_POINTS.id].byteOffset +
           this.packetKeys[DATA_MAP.AVERAGE_MPG_POINTS.id].byteLength
       )
-    );
+    );*/
   }
 
   /**

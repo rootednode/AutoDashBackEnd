@@ -17,7 +17,7 @@
     "js-yaml": "^4.1.0",
     "serialport": "^10.3.0",
     "socketcan": "^3.0.0",
-    "uWebSockets.js": "uNetworking/uWebSockets.js#v20.3.0"
+    "uWebSockets.js": "github:uNetworking/uWebSockets.js#v20.52.0"
   },
   "devDependencies": {
     "eslint": "^7.32.0",

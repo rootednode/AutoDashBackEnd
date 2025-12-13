@@ -1,4 +1,3 @@
-// https://github.com/uNetworking/uWebSockets.js
 import uWS from 'uWebSockets.js';
 
 class DashSocketComms {
@@ -7,77 +6,99 @@ class DashSocketComms {
     this.url = url;
     this.port = port;
     this.started = false;
-    this.sockets = []
+
+    // ⭐ Use a Set instead of an array (fixes stale/dead sockets)
+    this.sockets = new Set();
+
+    // --------------------------
+    //  WebSocket Event Handlers
+    // --------------------------
 
     this.open = (ws) => {
-      this.sockets.push(ws);
-      console.log('AutoDash: A dash has been found - A WebSocket connected!');
-      ws.subscribe('#'); // just subscribe to everything for now; ill boost this up at some point
-    };
-    this.message = (ws, message, isBinary) => {
-      // console.log('WebSocket message received from dash', message);
-      /* Ok is false if backpressure was built up, wait for drain */
-      // let ok = ws.send(message, isBinary);
-    };
-    this.drain = (ws) => {
-      // console.log(`WebSocket backpressure: ${ws.getBufferedAmount()}`);
-    };
-    this.close = (ws, code, message) => {
-      const i = this.sockets.findIndex(s => s === ws);
-      if (i >= 0) {
-        this.sockets.splice(i, 1);
-      }
-      console.log('AutoDash: someone disconnected!');
+      console.log("AutoDash: WebSocket connected from a dashboard!");
+      this.sockets.add(ws);
     };
 
-    this.uWSApp = uWS.App({}).ws('/*', {
+    this.message = (ws, message, isBinary) => {
+      // No need to echo, but could log or process messages here
+      // console.log("WS MESSAGE:", new Uint8Array(message));
+    };
+
+    this.drain = (ws) => {
+      // Optional debugging
+      // console.log("WS drain", ws.getBufferedAmount());
+    };
+
+    this.close = (ws, code, msg) => {
+      console.log("AutoDash: Dashboard disconnected");
+      this.sockets.delete(ws);
+    };
+
+    // --------------------------
+    // Create uWS App with CORRECT bindings
+    // --------------------------
+    this.uWSApp = uWS.App({}).ws("/*", {
       compression: uWS.DISABLED,
-      // maxPayloadLength: 16 * 1024 * 1024,
       idleTimeout: 8,
-      /* Handlers */
-      open: this.open,
-      message: this.message,
-      drain: this.drain,
-      close: this.close,
+
+      // ⭐ Correct binding using arrow functions
+      open: (ws) => this.open(ws),
+      message: (ws, message, isBinary) => this.message(ws, message, isBinary),
+      drain: (ws) => this.drain(ws),
+      close: (ws, code, msg) => this.close(ws, code, msg),
     });
   }
 
+  // ------------------------------------------------------------
+  //  Send CAN frames to all connected dashboards
+  // ------------------------------------------------------------
   /**
-   * @param {Buffer} packet - array of 32Unit ID | 16UInt length of data | data...
+   * @param {Buffer} packet - buffer of CAN data
    */
   dashUpdate(packet) {
-    this.sockets.forEach(ws => { ws.send(new Uint8Array(packet.buffer, packet.byteOffset, packet.length), true) });
-    // this.uWSApp.publish(
-    //   'data_update',
-    //   new Uint8Array(packet.buffer, packet.byteOffset, packet.length),
-    //   true,
-    // );
+    const data = new Uint8Array(packet.buffer, packet.byteOffset, packet.length);
+
+    for (const ws of this.sockets) {
+      try {
+        ws.send(data, true);  // binary = true
+      } catch (e) {
+        console.warn("Removing dead WebSocket:", e);
+        this.sockets.delete(ws);
+      }
+    }
   }
 
   notifyError() {
     this.uWSApp.publish('error', 'onno');
   }
 
+  // ------------------------------------------------------------
+  // Start listening for frontend dashboards
+  // ------------------------------------------------------------
   start() {
     this.started = true;
     this.uWSApp.listen(this.port, (token) => {
       if (token) {
         this.listenSocket = token;
-        console.log(`AutoDash: Listening to port ${this.port}`);
+        console.log(`AutoDash: Listening on WebSocket port ${this.port}`);
       } else {
-        console.log(`AutoDash: !!!FAILED to listen to port ${this.port}`);
+        console.error("AutoDash: FAILED to bind WebSocket port");
       }
     });
   }
 
+  // ------------------------------------------------------------
+  // Stop server cleanly on process shutdown / restart
+  // ------------------------------------------------------------
   stop() {
     this.started = false;
     if (this.listenSocket) {
+      console.log("AutoDash: Closing WebSocket server");
       uWS.us_listen_socket_close(this.listenSocket);
       this.listenSocket = null;
-      console.log("AutoDash closing websocket");
     }
   }
 }
 
 export default DashSocketComms;
+

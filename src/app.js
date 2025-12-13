@@ -5,6 +5,17 @@ import ecuManager from './ecuManager.js'
 import { appSettingsManager } from './appSettingsManager.js'
 import DashContentWebServer from './webserver.js'
 
+import fs from 'fs';
+import path from 'path';
+
+
+// ensure logs dir exists
+if (!fs.existsSync('logs')) {
+  fs.mkdirSync('logs');
+  console.log('[CAN-LOG] created logs/ directory');
+}
+
+
 const UPDATE_MS = 33; //frequency  sent up to the dash  30fps (about 60hz)
 const SAVE_FREQ = 60000; // save interval - when to persist data
 let stopping = false;
@@ -41,9 +52,19 @@ export default function (canChannel, settings) {
       webserver.start();
       
       // Frontend update 
-      updateInterval = setInterval(() => {
-        dashComms.dashUpdate(ecu.latestPacket())
-      }, UPDATE_MS);
+      //updateInterval = setInterval(() => {
+      //  dashComms.dashUpdate(ecu.latestPacket())
+      //}, UPDATE_MS);
+
+updateInterval = setInterval(() => {
+  const packet = ecu.latestPacket();
+  if (packet) {
+    dashComms.dashUpdate(packet);
+  }
+}, UPDATE_MS);
+
+
+
 
       //file saving
       if (settings.ecu.persist) {

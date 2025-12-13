@@ -1,35 +1,15 @@
 import can from 'socketcan'
+import { logCAN } from './logger.js';   // <── ADD THIS
 
-// Example data;
-// ts_sec: 1619982309,
-// ts_usec: 809681,
-// id: 505189072,
-// ext: true,
-// data: <Buffer 80 00 00 00 00 00 00 00>
-/**
- * Strictly handles the communication with CANBUS
- */
-let timeout = null;
+let timeout = null
+
 class CanbusManager {
-  /**
-   * Listens to can messges
-   * @param {string} channel - Example: vcan0 , can0 , can1
-   */
+
   constructor(channel) {
     this.started = false;
     this.channelName = channel;
-    
   }
 
-  /**
-  * store all messages into mini database - to be sent in one big packet per 'frame'
-  * @param {{ ts: number; id: number; data: Uint8Array; ext: boolean; }} msg 
-  */
-
-  /**
-   * Starts listening to the canbus - collect data into a dictionary;
-   * @param {Function} [onUpdateCallback]
-   */
   start(onUpdateCallback) {
     this.onUpdateCallback = onUpdateCallback;
 
@@ -38,10 +18,17 @@ class CanbusManager {
       if (this.channel) {
         this.resetTimeout();
         this.channel.start();
+
         this.channel.addListener('onMessage', (msg) => {
           this.resetTimeout();
+
+          // 🔥 LOG CAN FRAME HERE
+          logCAN(msg);
+
+          // continue your existing data pipeline
           this.onUpdateCallback(msg);
         });
+
         this.started = true;
       } else {
         throw new Error('Cannot create channel - Did you properly raise the interface?');
@@ -70,3 +57,4 @@ class CanbusManager {
 }
 
 export default CanbusManager;
+

@@ -22,32 +22,19 @@ const keygen = (reset = false) => {
 
 export const DATA_MAP = {
   // Data From CAN BUS
-  //PEDAL_POSITION: { id: keygen(), byteType: TYPES.INT8 },  // xxx percent
+  COM: { id: keygen(), byteType: TYPES.INT8 },
   RPM: { id: keygen(), byteType: TYPES.INT16 }, // units 1 === 1 RPM,  xx,xxx
-  // RTC: { id: keygen(), byteType: TYPES.FOUR_BYTES }, // RTC clock = not used or defined yet
-  //FUEL_PRESSURE: { id: keygen(), byteType: TYPES.INT16 }, // units 1 === 1 psi
   SPEEDO: { id: keygen(), byteType: TYPES.INT16 }, // Holley Speed = units 1 === 1 mph
   PW1: { id: keygen(), byteType: TYPES.FLOAT },
   ADV: { id: keygen(), byteType: TYPES.FLOAT },
-  //FUEL_FLOW: { id: keygen(), byteType: TYPES.INT16 }, // x,xxx pounds/hour
-  //CLOSED_LOOP_STATUS: { id: keygen(), byteType: TYPES.INT8 },
   DUTY_CYCLE: { id: keygen(), byteType: TYPES.INT8 },
-  AFR: { id: keygen(), byteType: TYPES.FLOAT }, // xx.x A/F
-  //AFR_LEFT: { id: keygen(), byteType: TYPES.FLOAT }, // xx.x A/F
-  //CLOSED_LOOP_COMP: { id: keygen(), byteType: TYPES.INT16 },
-  //AFR_RIGHT: { id: keygen(), byteType: TYPES.FLOAT }, // xx.x A/F
-  //TARGET_AFR:{ id: keygen(), byteType: TYPES.FLOAT }, // xx.x A/F
-  //AFR_AVERAGE: { id: keygen(), byteType: TYPES.FLOAT }, // xx.x A/F
-  IGNITION_TIMING:{ id: keygen(), byteType: TYPES.FLOAT }, // units 1 == 1 degree
+  AFR: { id: keygen(), byteType: TYPES.FLOAT },
+  EGO: { id: keygen(), byteType: TYPES.FLOAT },
   MAP: { id: keygen(), byteType: TYPES.INT16 }, // units 1 === 1 (PRESSURE_TYPE) (defaults to kpa if not set)
-  //KNOCK_RETARD: { id: keygen(), byteType: TYPES.INT16 },
   MAT: { id: keygen(), byteType: TYPES.INT16 }, //manifold temp 
   TPS: { id: keygen(), byteType: TYPES.INT16 },
-  EGO: { id: keygen(), byteType: TYPES.INT16 },
-  //BAR_PRESSURE: { id: keygen(), byteType: TYPES.FLOAT },// xxx.x kPa
   CTS: { id: keygen(), byteType: TYPES.INT16 },  // coolant (defaults to F if TEMP_TYPE isnt set )
-  //OIL_PRESSURE: { id: keygen(), byteType: TYPES.INT16 }, // PSI  // xxx   psi
-  //BATT_VOLTAGE: { id: keygen(), byteType: TYPES.FLOAT }, // xx.x volts
+  ENGINE: { id: keygen(), byteType: TYPES.INT16 },
   STATUS1: { id: keygen(), byteType: TYPES.INT16 },
   STATUS2: { id: keygen(), byteType: TYPES.INT16 },
   STATUS3: { id: keygen(), byteType: TYPES.INT16 },
@@ -56,20 +43,33 @@ export const DATA_MAP = {
   STATUS6: { id: keygen(), byteType: TYPES.INT16 },
   STATUS7: { id: keygen(), byteType: TYPES.INT16 },
   STATUS8: { id: keygen(), byteType: TYPES.INT16 },
+  SENSOR1: { id: keygen(), byteType: TYPES.FLOAT },
+  SENSOR2: { id: keygen(), byteType: TYPES.FLOAT },
+  SENSOR3: { id: keygen(), byteType: TYPES.FLOAT },
+  SENSOR4: { id: keygen(), byteType: TYPES.FLOAT },
+  VOLT: { id: keygen(), byteType: TYPES.FLOAT },
+
+  ADC1: { id: keygen(), byteType: TYPES.FLOAT },
+  ADC2: { id: keygen(), byteType: TYPES.FLOAT },
+  ADC3: { id: keygen(), byteType: TYPES.FLOAT },
+  ADC4: { id: keygen(), byteType: TYPES.FLOAT },
 
   // Data from GPS
-  CURRENT_ODOMETER:{ id: keygen(), byteType: TYPES.INT16 },// Current Miles Odometer
-  ODOMETER:{ id: keygen(), byteType: TYPES.INT16 },// Current Miles Odometer
-  TRIP_ODOMETER: { id: keygen(), byteType: TYPES.INT16 }, //
-  GPS_SPEEED: { id: keygen(), byteType: TYPES.INT16 }, // Speed MPH
+  CURRENT_ODOMETER:{ id: keygen(), byteType: TYPES.FLOAT },// Current Miles Odometer
+  ODOMETER:{ id: keygen(), byteType: TYPES.FLOAT },// Current Miles Odometer
+  TRIP_ODOMETER: { id: keygen(), byteType: TYPES.FLOAT }, //
 
   WARNINGS: { id: keygen(), byteType: TYPES.BITFIELD }, // see warning keys
 
-  FUEL_LEVEL: { id: keygen(), byteType: TYPES.INT8 }, // 0-100%
+  FUEL_SENDER_CONNECTED: { id: keygen(), byteType: TYPES.INT8 }, // 0-100%
+  FUEL_LEVEL: { id: keygen(), byteType: TYPES.INT16 }, // 0-100%
+  FUEL_GALLONS_USED: { id: keygen(), byteType: TYPES.FLOAT },
+  FUEL_GALLONS_SINCE_REFILL: { id: keygen(), byteType: TYPES.FLOAT },
+
   CURRENT_MPG: { id: keygen(), byteType: TYPES.FLOAT },
   AVERAGE_MPG: { id: keygen(), byteType: TYPES.FLOAT },
-  AVERAGE_MPG_POINTS: { id: keygen(), byteType: TYPES.SPECIAL_ARRAY }, // histogram of MPG points
-  AVERAGE_MPG_POINT_INDEX: { id: keygen(), byteType: TYPES.INT8 },
+  HISTORICAL_MPG: { id: keygen(), byteType: TYPES.FLOAT },
+
   LOW_LIGHT_DETECTED: { id: keygen(), byteType: TYPES.INT8 },
 
   // TODO: ;just make a single bitfield for these types of things
