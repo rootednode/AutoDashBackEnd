@@ -1,6 +1,16 @@
 import { DATA_MAP } from "../dataKeys.js";
 import { performance } from "perf_hooks";
 
+const INJ_RATED_CC  = 360;
+const INJ_RATED_PSI = 43.5;
+
+function injectorFlowAtPressureCcMin(fuelPsi) {
+  if (!Number.isFinite(fuelPsi) || fuelPsi < 20) return INJ_RATED_CC;
+  const psi = Math.max(20, Math.min(80, fuelPsi));
+  return INJ_RATED_CC * Math.sqrt(psi / INJ_RATED_PSI);
+}
+
+
 
 const lastValues = {};
 
@@ -9,7 +19,7 @@ let lastVssTime = performance.now();
 let saveTick = 0;
 
 import fs from "fs";
-const HISTORY_FILE = "/home/pi/AutoDashBackEnd/history.json";
+const HISTORY_FILE = "./data/history.json";
 
 let historical = {
   totalMiles: 0,
@@ -40,7 +50,7 @@ let historicalAvgMpg = 0;
 
 
 function computeFuelCCPerMin(pw_ms, rpm) {
-  const injectorCc = 390;
+  const injectorCc = 360;
   const numInjectors = 4;
   const duty = (pw_ms * rpm) / 120000;
   if (duty < 1e-6) return 0;
@@ -49,9 +59,9 @@ function computeFuelCCPerMin(pw_ms, rpm) {
 
 
 
-function computeMPG(pw_ms, rpm, mph) {
+function computeMPG(pw_ms, rpm, mph, fuelPsi) {
 
-	console.log(pw_ms, rpm, mph);
+	//console.log(pw_ms, rpm, mph);
 
   if (!Number.isFinite(pw_ms) || !Number.isFinite(rpm) || !Number.isFinite(mph)) {
     return { mpg: lastValidMpg, avg: historicalAvgMpg };
@@ -62,7 +72,8 @@ function computeMPG(pw_ms, rpm, mph) {
     return { mpg: 0, avg: historicalAvgMpg };
   }
 
-  const injectorCc = 390;
+	const injectorCc = injectorFlowAtPressureCcMin(fuelPsi);
+
   const numInjectors = 4;
 
   const duty = (pw_ms * rpm) / 120000;
@@ -85,9 +96,11 @@ function computeMPG(pw_ms, rpm, mph) {
 
   lastValidMpg = mpg;
 
-  mpgSum += mpg;
-  mpgCount++;
-  historicalAvgMpg = mpgSum / mpgCount;
+  //mpgSum += mpg;
+  ///mpgCount++;
+  //historicalAvgMpg = mpgSum / mpgCount;
+	
+	historicalAvgMpg = historical.totalMiles / historical.totalGallons;
 
   return { mpg, avg: historicalAvgMpg };
 }
@@ -236,6 +249,11 @@ const MS_CAN_MAP = {
   const mps = (rawSpeed > 0 && rawSpeed < 10000) ? rawSpeed / 10 : 0;
   const mph = mps * 2.23694;
 
+const fuelPsi = lastValues[DATA_MAP.SENSOR2.id] || 0;
+
+
+
+
   // --- time delta in seconds ---
   const now = performance.now();
   let dtSeconds = (now - lastVssTime) / 1000;
@@ -260,7 +278,10 @@ const MS_CAN_MAP = {
   const rpm = lastValues[DATA_MAP.RPM.id] || 0;
 
   // Compute current + trip average MPG
-  const { mpg: currentMPG, avg: averageMPG } = computeMPG(pw1, rpm, mph);
+  //const { mpg: currentMPG, avg: averageMPG } = computeMPG(pw1, rpm, mph);
+const { mpg: currentMPG, avg: averageMPG } =
+  computeMPG(pw1, rpm, mph, fuelPsi);
+
 
   // Update lifetime gallons (time-based, not frame-based)
   if (mph > 1 && currentMPG > 0 && dtSeconds > 0) {
@@ -281,7 +302,9 @@ const MS_CAN_MAP = {
   if (saveTick >= 60) {
     saveTick = 0;
     try {
-      fs.writeFileSync(HISTORY_FILE, JSON.stringify(historical, null, 2));
+			if (process.env.TYPE !== "development") {
+      	fs.writeFileSync(HISTORY_FILE, JSON.stringify(historical, null, 2));
+			}
     } catch (e) {
       console.error("History save error:", e);
     }

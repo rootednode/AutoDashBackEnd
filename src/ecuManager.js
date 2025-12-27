@@ -1,6 +1,7 @@
 import { performance } from "perf_hooks";
 import msDecoder from "./CAN/msDecoder.js";
 import fuelLevelUpdater from "./fuelLevelReader.js";
+import { computeEcoBar } from "./ecoBar.js";
 import { DATA_MAP, WARNING_KEYS } from "./dataKeys.js";
 import DataStore from "./DataStore.js";
 import RingBuffer from "./lib/ringBuffer.js";
@@ -51,10 +52,11 @@ export default (carSettings, canChannel) => {
 		console.log("init odo", odometer);
 		initializeOdometer(odometer);
 
-//		fuelLevelUpdater(ecuDataStore, "B");
 fuelLevelUpdater(ecuDataStore, () => {
-  lastCanUpdateTime = performance.now();
+  // intentionally empty
+  // fuel updates must NOT mark CAN as fresh
 });
+
 
 
 	};
@@ -103,11 +105,11 @@ fuelLevelUpdater(ecuDataStore, () => {
 				ecuDataStore.write(DATA_MAP.CURRENT_ODOMETER, currentOdo);
 
 
-console.log(
+/*console.log(
 	"increment", data,
 	"traveled", traveled,
 	"currentOdo", currentOdo
-);
+);*/
 
 
 
@@ -132,15 +134,23 @@ console.log(
 				.forEach((canData) =>
 					updateValue({ dataKey: canData.id, data: canData.data })
 				);
+
+
+    const eco = computeEcoBar(ecuDataStore);
+
+    if (eco) {
+      ecuDataStore.write(DATA_MAP.ECO, eco.eco_pct);
+    }
+
 			return canUpdate;
 		}
 	};
 
 	// turns on CAN error, initiate shutdown
 	const canUpdateToError = () => {
-		if (canChannel === "can0" && carSettings.shutdown_when_can_stops) {
+//		if (canChannel === "can0" && carSettings.shutdown_when_can_stops) {
 //			piShutdown.start(); // dont shutdown if we are testing stuff
-		}
+//		}
 		ecuDataStore.updateWarning(WARNING_KEYS.ECU_COMM, true);
 		return canUpdateErrorState;
 	};

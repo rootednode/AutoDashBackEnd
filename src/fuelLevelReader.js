@@ -11,14 +11,17 @@ const dbg = (...args) => DEBUG_FUEL && console.log("[FUEL]", ...args);
 // ─────────────────────────────────────────────
 // CONFIG
 // ─────────────────────────────────────────────
-const CAL_FILE   = "./fuelCal.json";
-const USED_FILE  = "./fuelUsed.json";
-const PCT_FILE   = "./fuelPct.json";
+const CAL_FILE   = "./data/fuelCal.json";
+const USED_FILE  = "./data/fuelUsed.json";
+const PCT_FILE   = "./data/fuelPct.json";
 
 const SAMPLE_MS = 100;
 
 // Injector / fuel math
-const INJECTOR_FLOW_CC = 390;
+const INJ_RATED_PSI = 43.5;  // typical Bosch rating
+
+const INJ_RATED_CC = 360;
+const INJECTOR_FLOW_CC = 360;
 const NUM_INJECTORS = 4;
 const CC_PER_GALLON = 3785.41;
 
@@ -26,10 +29,25 @@ const CC_PER_GALLON = 3785.41;
 const REFUEL_STEP_PCT = 15;
 const REFUEL_MIN_PCT  = 30;
 const REFUEL_CONFIRM_SAMPLES = 10;
+const REFUEL_WINDOW_MS = 60_000; // 1 minute
+const REFUEL_DELTA_PCT = 25;
+
+let stoppedSamples = [];
 
 // Sender
-const RAW_DISCONNECTED_THRESHOLD = 100;
+const RAW_DISCONNECTED_THRESHOLD = 50;
 const FUEL_INVALID = -1;
+
+// Smoother
+const window = [];
+const N = 15;
+
+
+let testFuelPct = 20;          // start low
+let testRefillActive = true;
+let testRefillStart = 0;
+
+
 
 // ADS1115
 const CONFIG_OS = 0x8000;
@@ -39,13 +57,66 @@ const CONFIG_COMP_DISABLE = 0x0003;
 const CONFIG_PGA_4096 = 0x0200;
 const MUX = [0x4000, 0x5000, 0x6000, 0x7000];
 
+
+function smoothMA(raw) {
+  window.push(raw);
+  if (window.length > N) window.shift();
+  return window.reduce((a, b) => a + b, 0) / window.length;
+}
+
+
+
+
 // ─────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────
+function injectorFlowAtPressureCcMin(fuelPsi) {
+  if (!Number.isFinite(fuelPsi) || fuelPsi <= 5) {
+    return INJ_RATED_CC; // fallback
+  }
+
+  // Clamp to sane range to avoid spikes
+  const psi = Math.max(20, Math.min(80, fuelPsi));
+
+  return INJ_RATED_CC * Math.sqrt(psi / INJ_RATED_PSI);
+}
+
+
+
 function safeAdd(acc, delta) {
   if (!Number.isFinite(delta) || delta <= 0) return acc;
   return acc + delta;
 }
+
+function minPctInWindow(now) {
+  // keep only last 60s
+  stoppedSamples = stoppedSamples.filter(s => now - s.t <= REFUEL_WINDOW_MS);
+
+  let min = Infinity;
+  for (const s of stoppedSamples) {
+    if (s.pct < min) min = s.pct;
+  }
+  return Number.isFinite(min) ? min : null;
+}
+
+function getTestFuelPercent(now) {
+  if (!testRefillActive) return testFuelPct;
+
+  const elapsed = now - testRefillStart;
+  const duration = 60_000; // 1 minute
+  const startPct = 15;
+  const endPct   = 80;     // +35% refill
+
+  const t = Math.min(1, elapsed / duration);
+  testFuelPct = startPct + (endPct - startPct) * t;
+
+  if (t >= 1) {
+    testRefillActive = false;
+  }
+
+  return testFuelPct;
+}
+
 
 // ─────────────────────────────────────────────
 // CALIBRATION
@@ -57,8 +128,13 @@ function loadCalibration() {
       return d;
     }
   } catch {}
-  const cal = { rawMin: 200, rawMax: 8000 };
+  const cal = { rawMin: 200, rawMax: 10000 };
+
+
+	if (global.CAN?.iface === "vcan0") return cal;
+	if (process.env.TYPE === "development") return cal;
   fs.writeFileSync(CAL_FILE, JSON.stringify(cal));
+
   return cal;
 }
 
@@ -77,6 +153,8 @@ function loadUsed() {
 }
 
 function saveUsed(val) {
+	if (global.CAN?.iface === "vcan0") return;
+	if (process.env.TYPE === "development") return;
   fs.writeFileSync(USED_FILE, JSON.stringify({ used: val }));
 }
 
@@ -89,6 +167,8 @@ function loadFuelPct() {
 }
 
 function saveFuelPct(pct) {
+	if (global.CAN?.iface === "vcan0") return;
+	if (process.env.TYPE === "development") return;
   fs.writeFileSync(PCT_FILE, JSON.stringify({ pct }));
 }
 
@@ -161,6 +241,20 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
   ecuDataStore.write(DATA_MAP.FUEL_GALLONS_SINCE_REFILL, gallonsSinceRefuel);
   ecuDataStore.write(DATA_MAP.FUEL_GALLONS_USED, tripGallonsUsed);
 
+
+if (process.env.TYPE === "development" && testRefillStart === 0) {
+  testRefillStart = Date.now();
+  testRefillActive = true;
+  dbg("🧪 Starting fake refill ramp");
+}
+
+if (global.CAN?.iface === "vcan0" && testRefillStart === 0) {
+  testRefillStart = Date.now();
+  testRefillActive = true;
+  dbg("🧪 Starting fake refill ramp");
+}
+
+
   setInterval(() => {
     const now = Date.now();
     const dt = (now - lastTime) / 1000;
@@ -168,35 +262,66 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
     if (dt <= 0 || dt > 0.5) return;
 
     // ────────── FUEL USED (PW + RPM) ──────────
-    const pwMs = ecuDataStore.read(DATA_MAP.PW1) || 0;
-    const rpm  = ecuDataStore.read(DATA_MAP.RPM) || 0;
+const pwMs = ecuDataStore.read(DATA_MAP.PW1) || 0;
+const rpm  = ecuDataStore.read(DATA_MAP.RPM) || 0;
 
-    if (pwMs > 0 && rpm > 500) {
-      const injectionsPerSec = rpm / 2 / 60;
-      const ccPerInjection = (INJECTOR_FLOW_CC / 60) * (pwMs / 1000);
-      const gallonsPerSec =
-        (ccPerInjection * injectionsPerSec * NUM_INJECTORS) /
-        CC_PER_GALLON;
+if (pwMs > 0.5 && rpm > 500) {
+  const fuelPsi = ecuDataStore.read(DATA_MAP.SENSOR2);
 
-      const delta = gallonsPerSec * dt;
-      gallonsSinceRefuel = safeAdd(gallonsSinceRefuel, delta);
-      tripGallonsUsed    = safeAdd(tripGallonsUsed, delta);
+  const injFlowCcMin = injectorFlowAtPressureCcMin(fuelPsi);
 
-      ecuDataStore.write(DATA_MAP.FUEL_GALLONS_SINCE_REFILL, gallonsSinceRefuel);
-      ecuDataStore.write(DATA_MAP.FUEL_GALLONS_USED, tripGallonsUsed);
-      maybeSaveUsed(gallonsSinceRefuel);
-    }
+  const injectionsPerSec = (rpm / 120) * 2; // 2 squirts per cycle (your setup)
+
+  const ccPerInjection = (injFlowCcMin / 60) * (pwMs / 1000);
+
+  const gallonsPerSec =
+    (ccPerInjection * injectionsPerSec * NUM_INJECTORS) /
+    CC_PER_GALLON;
+
+  const delta = gallonsPerSec * dt;
+
+  gallonsSinceRefuel = safeAdd(gallonsSinceRefuel, delta);
+  tripGallonsUsed    = safeAdd(tripGallonsUsed, delta);
+
+  ecuDataStore.write(DATA_MAP.FUEL_GALLONS_SINCE_REFILL, gallonsSinceRefuel);
+  ecuDataStore.write(DATA_MAP.FUEL_GALLONS_USED, tripGallonsUsed);
+  maybeSaveUsed(gallonsSinceRefuel);
+}
+
+
 
     // ────────── FUEL SENDER ──────────
-    let raw = null;
-    try { raw = readAds1115Raw(0); } catch {}
+    //let raw = null;
+    //try { raw = readAds1115Raw(0); } catch {}
+
+
+let raw;
+
+if (process.env.TYPE === "development") {
+  const pct = getTestFuelPercent(now);
+
+  // convert percent → fake raw value
+  raw = rawMax - (pct / 100) * (rawMax - rawMin);
+  //dbg("Fake RAW:", raw);
+} else {
+  try { raw = readAds1115Raw(0); } catch {}
+}
+
+raw = smoothMA(raw);
+
+
+
+		//raw = Math.floor(Math.random() * (10000 - -800)) + -800;
+		//raw = Math.abs(raw);		
+		//raw = smoothMA(raw);
+
 
     const senderConnected =
       Number.isFinite(raw) &&
       raw >= RAW_DISCONNECTED_THRESHOLD &&
       raw <= rawMax;
 
-    dbg("RAW:", raw, "CONNECTED:", senderConnected);
+    //dbg("RAW:", raw, "CONNECTED:", senderConnected);
 
     ecuDataStore.write(
       DATA_MAP.FUEL_SENDER_CONNECTED,
@@ -205,7 +330,7 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
 
     if (!senderConnected) {
       lastFuelPct = null;
-      refuelLocked = true;
+      //refuelLocked = true;
       ecuDataStore.write(DATA_MAP.FUEL_LEVEL, FUEL_INVALID);
       return;
     }
@@ -223,21 +348,31 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
 
     if (speed < 1) saveFuelPct(percent);
 
-    if (lastFuelPct !== null && percent < lastFuelPct - 5) {
-      refuelLocked = false;
-    }
 
-    if (
-      !refuelLocked &&
-      lastFuelPct !== null &&
-      speed < 1 &&
-      percent - lastFuelPct > REFUEL_STEP_PCT &&
-      percent > REFUEL_MIN_PCT
-    ) {
-      refuelCount++;
-    } else {
-      refuelCount = 0;
-    }
+if (speed < 1) {
+  stoppedSamples.push({ t: now, pct: percent });
+
+  const minPct = minPctInWindow(now);
+  const delta  = minPct !== null ? percent - minPct : 0;
+
+  dbg("REFUEL chk", { percent, minPct, delta });
+
+  if (
+    !refuelLocked &&
+    minPct !== null &&
+    delta >= REFUEL_DELTA_PCT &&
+    percent > REFUEL_MIN_PCT
+  ) {
+    refuelCount++;
+  } else {
+    refuelCount = Math.max(0, refuelCount - 1);
+  }
+} else {
+  stoppedSamples.length = 0;
+  refuelCount = 0;
+}
+
+
 
     if (refuelCount >= REFUEL_CONFIRM_SAMPLES) {
       gallonsSinceRefuel = 0;

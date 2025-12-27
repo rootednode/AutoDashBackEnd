@@ -22,6 +22,9 @@ function openLogIfNeeded() {
 }
 
 export function logCAN(msg) {
+  // 🚫 Never log simulated CAN
+  if (global.CAN?.simulated) return;
+
   try {
     const { ts_sec, ts_usec, id, data } = msg;
 

@@ -1,3 +1,10 @@
+import { initCan } from "./IO/canStartup.js";
+
+const CAN = initCan();
+global.CAN = CAN; // optional but useful
+
+
+
 import DashSocketComms from './dashSocketComms.js'
 import CanbusManager from './CAN/canbusManager.js'
 //import GPSManager from './GPS/gpsManager.js'
@@ -70,6 +77,9 @@ updateInterval = setInterval(() => {
       if (settings.ecu.persist) {
         savingUpdateInterval = setInterval(() => {
           console.log('saving persistant data');
+
+					if (global.CAN?.iface === "vcan0") return;
+					if (process.env.TYPE === "development") return;
           appSettings.saveSettings(ecu.persistantData());
         }, SAVE_FREQ);
 

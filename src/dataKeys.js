@@ -61,6 +61,8 @@ export const DATA_MAP = {
 
   WARNINGS: { id: keygen(), byteType: TYPES.BITFIELD }, // see warning keys
 
+  ECO: { id: keygen(), byteType: TYPES.INT8 }, // 0-100%
+
   FUEL_SENDER_CONNECTED: { id: keygen(), byteType: TYPES.INT8 }, // 0-100%
   FUEL_LEVEL: { id: keygen(), byteType: TYPES.INT16 }, // 0-100%
   FUEL_GALLONS_USED: { id: keygen(), byteType: TYPES.FLOAT },
