@@ -1,5 +1,5 @@
 import can from 'socketcan'
-import { logCAN } from './logger.js';   // <── ADD THIS
+import { closeCANLog, logCAN } from './logger.js';
 
 let timeout = null
 
@@ -46,6 +46,7 @@ class CanbusManager {
     this.started = false;
     if(this.channel) this.channel.stop();
     this.channel = null;
+    closeCANLog();
   }
 
   resetTimeout() {
@@ -57,4 +58,3 @@ class CanbusManager {
 }
 
 export default CanbusManager;
-

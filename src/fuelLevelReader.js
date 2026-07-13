@@ -280,7 +280,7 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
     dbg("🧪 Starting fake refill ramp");
   }
 
-  setInterval(() => {
+  const interval = setInterval(() => {
     const now = Date.now();
     const dt = (now - lastTime) / 1000;
     lastTime = now;
@@ -440,4 +440,6 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
 
     markFresh();
   }, SAMPLE_MS);
+
+  return () => clearInterval(interval);
 }

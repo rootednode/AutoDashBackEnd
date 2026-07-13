@@ -39,7 +39,7 @@ export const DATA_MAP = {
   STATUS2: { id: keygen(), byteType: TYPES.INT16 },
   STATUS3: { id: keygen(), byteType: TYPES.INT16 },
   STATUS4: { id: keygen(), byteType: TYPES.INT16 },
-  STATUS5: { id: keygen(), byteType: TYPES.INT16 },
+  STATUS5: { id: keygen(), byteType: TYPES.UINT16 },
   STATUS6: { id: keygen(), byteType: TYPES.INT16 },
   STATUS7: { id: keygen(), byteType: TYPES.INT16 },
   STATUS8: { id: keygen(), byteType: TYPES.INT16 },

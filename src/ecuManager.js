@@ -26,8 +26,14 @@ export default (carSettings, canChannel) => {
 	// track last time CAN data was updated
 	let lastCanUpdateTime = 0;
 
-	// assign decoder - currently this was designed for racepak but we have LOOSE support for openInverter stuff
-	const decoder = carSettings.can_type === "OI" ? openInverterDecoder : msDecoder;
+	// Only the MegaSquirt/Racepak decoder is present in this build. Keep the
+	// server operational if an old OI setting is encountered instead of
+	// referencing a decoder that does not exist.
+	if (carSettings.can_type === "OI") {
+		console.warn("[ECU] OI decoder is unavailable; falling back to the MegaSquirt decoder");
+	}
+	const decoder = msDecoder;
+	let stopFuelLevelUpdater = null;
 
 	/**
 	 * Initialize the Odometer reading with the last known saved readout
@@ -52,7 +58,8 @@ export default (carSettings, canChannel) => {
 		console.log("init odo", odometer);
 		initializeOdometer(odometer);
 
-fuelLevelUpdater(ecuDataStore, () => {
+		if (stopFuelLevelUpdater) stopFuelLevelUpdater();
+		stopFuelLevelUpdater = fuelLevelUpdater(ecuDataStore, () => {
   // intentionally empty
   // fuel updates must NOT mark CAN as fresh
 });
@@ -67,27 +74,6 @@ fuelLevelUpdater(ecuDataStore, () => {
 			case DATA_MAP.PW1:
 				//updateMPG(data);
 				// updateFuelLeft();
-				break;
-
-			case DATA_MAP.CTS:
-				ecuDataStore.updateWarning(
-					WARNING_KEYS.ENGINE_TEMPERATURE,
-					data > carSettings.engine_temp_high
-				);
-				break;
-
-			case DATA_MAP.OIL_PRESSURE:
-				ecuDataStore.updateWarning(
-					WARNING_KEYS.OIL_PRESSURE,
-					data < carSettings.oil_low_limit
-				);
-				break;
-
-			case DATA_MAP.BATT_VOLTAGE:
-				ecuDataStore.updateWarning(
-					WARNING_KEYS.BATT_VOLTAGE,
-					data < carSettings.voltage_low_limit
-				);
 				break;
 
 			case DATA_MAP.ODOMETER: {
@@ -176,6 +162,10 @@ fuelLevelUpdater(ecuDataStore, () => {
 	const ecu = {
 		init,
 		stop: () => {
+			if (stopFuelLevelUpdater) {
+				stopFuelLevelUpdater();
+				stopFuelLevelUpdater = null;
+			}
 			try {
 				buttons.stop();
 			} catch (error) {}
@@ -222,4 +212,3 @@ fuelLevelUpdater(ecuDataStore, () => {
 
 	return ecu;
 };
-

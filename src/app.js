@@ -1,10 +1,3 @@
-import { initCan } from "./IO/canStartup.js";
-
-const CAN = initCan();
-global.CAN = CAN; // optional but useful
-
-
-
 import DashSocketComms from './dashSocketComms.js'
 import CanbusManager from './CAN/canbusManager.js'
 //import GPSManager from './GPS/gpsManager.js'
