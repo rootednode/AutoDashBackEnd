@@ -30,6 +30,7 @@ const dataWorker = new Worker(
 // STATE
 // --------------------------------------------------
 let updateData = [];
+let hasNewData = false;
 
 let canReady = false;        // latched proof-of-life
 let commsDead = false;      // full reset latch
@@ -88,7 +89,6 @@ function setDashboardOpacity(opacity) {
 // --------------------------------------------------
 const tick = () => {
   const now = Date.now();
-  counter++;
 
 
 
@@ -109,6 +109,7 @@ const tick = () => {
 
     commsDead = true;
     canReady = false;
+    hasNewData = false;
 
 	    setDashboardOpacity("0.3");
 
@@ -124,12 +125,11 @@ const tick = () => {
     canReady &&
     !commsDead &&
     isCommError === 0 &&
-    isWatchdogTripped === 0
+    isWatchdogTripped === 0 &&
+    hasNewData
   ) {
-    // CAN health indicator
-    canIndicator.update(false);
-
-	    setDashboardOpacity("1");
+    hasNewData = false;
+    counter++;
 
     const rpm = updateData[DATA_MAP.RPM.id];
     tachometer.update(rpm, isCommError);
@@ -146,6 +146,7 @@ const tick = () => {
           updateData[DATA_MAP.FUEL_LEVEL.id],
           updateData[DATA_MAP.FUEL_GALLONS_USED.id],
           updateData[DATA_MAP.FUEL_GALLONS_SINCE_REFILL.id],
+          updateData[DATA_MAP.FUEL_SENDER_CONNECTED.id],
           isCommError
         );
       } catch {}
@@ -227,6 +228,7 @@ dataWorker.onmessage = (event) => {
     case "update_data_ready":
       lastPacketTime = Date.now();
       updateData = event.data.updateData;
+      hasNewData = true;
 
       // A decoded packet is proof of life. The backend only publishes packets
       // while CAN data is fresh, so do not block the whole dashboard waiting
@@ -234,6 +236,8 @@ dataWorker.onmessage = (event) => {
       if (!canReady && Array.isArray(updateData) && updateData.length > 0) {
         canReady = true;
         commsDead = false;
+        setDashboardOpacity("1");
+        canIndicator.update(false);
         console.log("[DASH] CAN ready");
       }
       return;

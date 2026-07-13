@@ -1,47 +1,6 @@
 import { DATA_MAP } from "../dataKeys.js";
 import { performance } from "perf_hooks";
-
-const INJ_RATED_CC  = 360;
-const INJ_RATED_PSI = 43.5;
-
-const DEADTIME_CURVE = [
-  [8.0,  1.467],
-  [10.0, 1.070],
-  [12.0, 0.846],
-  [14.0, 0.694],
-  [15.0, 0.643],
-  [16.0, 0.595],
-];
-
-function computeFuelGPH(pw_ms, rpm, fuelRailPsi, mapKpa, volts) {
-  if (!Number.isFinite(pw_ms) || !Number.isFinite(rpm) || rpm <= 0) {
-    return 0;
-  }
-
-  const deadtimeMs = injectorDeadtimeMs(volts);
-  const fuelPwMs = Math.max(0, pw_ms - deadtimeMs);
-
-  if (fuelPwMs <= 0) return 0;
-
-  const deltaPsi = injectorDeltaPsi(fuelRailPsi, mapKpa);
-  const injectorCc = injectorFlowAtPressureCcMin(deltaPsi);
-
-  const numInjectors = 4;
-  const squirtsPerCycle = 2; // verify this matches your MS setup
-
-  const duty = (fuelPwMs * rpm * squirtsPerCycle) / 120000;
-
-  const ccMin = injectorCc * duty * numInjectors;
-  const gph = (ccMin * 60) / 3785.41;
-
-  return Number.isFinite(gph) && gph > 0 ? gph : 0;
-}
-
-function injectorFlowAtPressureCcMin(fuelPsi) {
-  if (!Number.isFinite(fuelPsi) || fuelPsi < 20) return INJ_RATED_CC;
-  const psi = Math.max(20, Math.min(80, fuelPsi));
-  return INJ_RATED_CC * Math.sqrt(psi / INJ_RATED_PSI);
-}
+import { computeFuelGPH } from "../fuelFlow.js";
 
 
 
@@ -49,10 +8,11 @@ const lastValues = {};
 
 let lastVssTime = performance.now();
 
-let saveTick = 0;
-
 import fs from "fs";
 const HISTORY_FILE = "./data/history.json";
+const HISTORY_SAVE_MS = 60_000;
+let lastHistorySaveTime = Date.now();
+let historySaveInFlight = false;
 
 let historical = {
   totalMiles: 0,
@@ -79,94 +39,6 @@ let tripMiles = 0;
 let tripGallons = 0;
 
 let lastValidMpg = 0;
-
-// running historical average
-let mpgSum = 0;
-let mpgCount = 0;
-let historicalAvgMpg = 0;
-
-
-function computeFuelCCPerMin(pw_ms, rpm) {
-  const injectorCc = 360;
-  const numInjectors = 4;
-  const duty = (pw_ms * rpm) / 120000;
-  if (duty < 1e-6) return 0;
-  return injectorCc * duty * numInjectors;  // cc/min
-}
-
-
-
-function injectorDeadtimeMs(volts) {
-  if (!Number.isFinite(volts)) return 0.694;
-
-  if (volts <= DEADTIME_CURVE[0][0]) return DEADTIME_CURVE[0][1];
-
-  for (let i = 0; i < DEADTIME_CURVE.length - 1; i++) {
-    const [v1, dt1] = DEADTIME_CURVE[i];
-    const [v2, dt2] = DEADTIME_CURVE[i + 1];
-
-    if (volts >= v1 && volts <= v2) {
-      const t = (volts - v1) / (v2 - v1);
-      return dt1 + t * (dt2 - dt1);
-    }
-  }
-
-  return DEADTIME_CURVE[DEADTIME_CURVE.length - 1][1];
-}
-
-function injectorDeltaPsi(fuelRailPsi, mapKpa) {
-  if (!Number.isFinite(fuelRailPsi) || fuelRailPsi < 10) {
-    return INJ_RATED_PSI;
-  }
-
-  // If fuel pressure sensor reads rail gauge pressure,
-  // convert to injector differential pressure.
-  const manifoldGaugePsi = (mapKpa - 101.325) * 0.145038;
-  const deltaPsi = fuelRailPsi - manifoldGaugePsi;
-
-  return Math.max(20, Math.min(80, deltaPsi));
-}
-
-function computeMPG(pw_ms, rpm, mph, fuelRailPsi, mapKpa, volts) {
-  if (!Number.isFinite(pw_ms) || !Number.isFinite(rpm) || !Number.isFinite(mph)) {
-    return lastValidMpg;
-  }
-
-  if (mph < 2) {
-    lastValidMpg = 0;
-    return 0;
-  }
-
-  const deadtimeMs = injectorDeadtimeMs(volts);
-  const fuelPwMs = Math.max(0, pw_ms - deadtimeMs);
-
-  const deltaPsi = injectorDeltaPsi(fuelRailPsi, mapKpa);
-  const injectorCc = injectorFlowAtPressureCcMin(deltaPsi);
-
-  const numInjectors = 4;
-  const squirtsPerCycle = 2; // change this if your MS setup is not 2 squirts
-
-  const duty = (fuelPwMs * rpm * squirtsPerCycle) / 120000;
-
-  if (duty < 1e-6) return lastValidMpg;
-
-  const ccMin = injectorCc * duty * numInjectors;
-  const gph = (ccMin * 60) / 3785.41;
-
-  if (gph < 1e-6) return lastValidMpg;
-
-  const mpg = mph / gph;
-
-  if (!Number.isFinite(mpg) || mpg <= 0) return lastValidMpg;
-
-  lastValidMpg = mpg;
-  return mpg;
-}
-
-
-
-
-
 
 // SAFE helper for reading signed 16-bit values
 function readS16(data, offset) {
@@ -328,51 +200,25 @@ const MS_CAN_MAP = {
   const pw1 = lastValues[DATA_MAP.PW1.id] || 0;
   const rpm = lastValues[DATA_MAP.RPM.id] || 0;
 
-  // ---- instant MPG ----
-//	const mapKpa = lastValues[DATA_MAP.MAP.id] || 101.325;
-//	const volts = lastValues[DATA_MAP.VOLT.id] || 14.0;
-//	const currentMPG = computeMPG(pw1, rpm, mph, fuelPsi, mapKpa, volts);
-
-  // ---- fuel integration ----
-	//const mapKpa = lastValues[DATA_MAP.MAP.id] || 101.325;
-	//const volts = lastValues[DATA_MAP.VOLT.id] || 14.0;
-
-//	const gph = computeFuelGPH(pw1, rpm, fuelPsi, mapKpa, volts);
-
-
-
 	const mapKpa = lastValues[DATA_MAP.MAP.id] || 101.325;
 	const volts = lastValues[DATA_MAP.VOLT.id] || 14.0;
 	const gph = computeFuelGPH(pw1, rpm, fuelPsi, mapKpa, volts);
 
 	// ---- instant MPG ----
 	let currentMPG = 0;
-
 	if (mph > 2 && gph > 0) {
-	  currentMPG = mph / gph;
-	  lastValidMpg = currentMPG;
+		currentMPG = mph / gph;
+		lastValidMpg = currentMPG;
 	} else if (mph > 2) {
-	  currentMPG = lastValidMpg;
+		currentMPG = lastValidMpg;
 	}
-
 
 	// ---- fuel integration ----
 	if (gph > 0 && dtSeconds > 0) {
-	  const gallonsThisFrame = gph * (dtSeconds / 3600);
-	
-	  historical.totalGallons += gallonsThisFrame;
-	  tripGallons += gallonsThisFrame;
+		const gallonsThisFrame = gph * (dtSeconds / 3600);
+		historical.totalGallons += gallonsThisFrame;
+		tripGallons += gallonsThisFrame;
 	}
-
-
-
-//  if (mph > 1 && currentMPG > 0 && dtSeconds > 0) {
-//    const gallonsPerHour = mph / currentMPG;
-//    const gallonsThisFrame = gallonsPerHour * (dtSeconds / 3600);
-
-//    historical.totalGallons += gallonsThisFrame;
-//    tripGallons += gallonsThisFrame;
-//  }
 
   // ---- averages ----
   if (tripMiles > 0 && tripGallons > 0) {
@@ -383,17 +229,21 @@ const MS_CAN_MAP = {
     histMPG = historical.totalMiles / historical.totalGallons;
   }
 
-  // ---- persist history ----
-  saveTick++;
-  if (saveTick >= 60) {
-    saveTick = 0;
-    try {
-      if (process.env.TYPE !== "development") {
-        fs.writeFileSync(HISTORY_FILE, JSON.stringify(historical, null, 2));
-      }
-    } catch (e) {
-      console.error("History save error:", e);
-    }
+  // ---- persist history without blocking CAN processing ----
+  const historySaveNow = Date.now();
+  if (
+    process.env.TYPE !== "development" &&
+    !historySaveInFlight &&
+    historySaveNow - lastHistorySaveTime >= HISTORY_SAVE_MS
+  ) {
+    historySaveInFlight = true;
+    lastHistorySaveTime = historySaveNow;
+    const historySnapshot = JSON.stringify(historical, null, 2);
+
+    fs.writeFile(HISTORY_FILE, historySnapshot, (error) => {
+      historySaveInFlight = false;
+      if (error) console.error("History save error:", error);
+    });
   }
 
   return [
@@ -439,4 +289,3 @@ const msDecoder = {
 };
 
 export default msDecoder;
-

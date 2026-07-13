@@ -8,7 +8,13 @@ export default {
       this.update.elGal.textContent = '0.0 / 0.0';
   },
 
-  update: function (fuel, gallons, gallonssincelastrefill, noComm) {
+  update: function (
+    fuel,
+    gallons,
+    gallonssincelastrefill,
+    senderConnected,
+    noComm
+  ) {
 
     // lazy-load if initialize ran too early
     if (!this.update.g) {
@@ -21,11 +27,6 @@ export default {
     const gauge = this.update.g;
     const elGal = this.update.elGal;
 
-    if (noComm) {
-      gauge.update({ valueText: "null" });
-      return;
-    }
-
     // ----- Gallons display -----
     if (elGal) {
       const g1 = Number.isFinite(gallons) ? gallons : 0;
@@ -33,30 +34,27 @@ export default {
       elGal.textContent = `${g1.toFixed(3)} / ${g2.toFixed(3)}`;
     }
 
-
-		//console.log('fuel', fuel);
-
     // ----- Fuel gauge -----
-    if (fuel === undefined || fuel === null)
-		{
-						try {
-							gauge.update({ valueText: "null" });
-							//gauge?.classList.add("disabled");
-						} catch (error) {
-							console.log(error);
-						}
+    const fuelValid =
+      !noComm &&
+      senderConnected === 1 &&
+      Number.isFinite(fuel) &&
+      fuel >= 0;
 
-		} else {
+    try {
+      if (!fuelValid) {
+        gauge.update({ valueText: "null" });
+        return;
+      }
 
-						try {
-							gauge.update({ value: fuel });
-						} catch (error) {
-							console.log(error);
-						}
-  	}
-	}
+      // An empty valueText restores the gauge's normal numeric display after
+      // a sender or communications failure.
+      gauge.update({ value: fuel, valueText: "" });
+    } catch (error) {
+      console.log(error);
+    }
+  }
 };
-
 
 
 

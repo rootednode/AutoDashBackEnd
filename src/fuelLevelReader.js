@@ -1,6 +1,7 @@
 import i2c from "i2c-bus";
 import fs from "fs";
 import { DATA_MAP } from "./dataKeys.js";
+import { computeFuelGPH } from "./fuelFlow.js";
 
 const ADS1115_ADDR = 0x48;
 const bus = i2c.openSync(1);
@@ -17,19 +18,16 @@ const USED_FILE  = "./data/fuelUsed.json";
 const PCT_FILE   = "./data/fuelPct.json";
 
 const SAMPLE_MS = 100;
-
-// Injector / fuel math
-const INJ_RATED_PSI = 43.5;  // typical Bosch rating
-
-const INJ_RATED_CC = 360;
-const NUM_INJECTORS = 4;
-const CC_PER_GALLON = 3785.41;
+const FUEL_PCT_SAVE_MIN_MS = 10_000;
+const FUEL_PCT_SAVE_MAX_MS = 30_000;
+const FUEL_PCT_SAVE_DELTA = 0.5;
 
 // Refuel detection
 const REFUEL_MIN_PCT  = 20;
-const REFUEL_CONFIRM_SAMPLES = 20;   // 30 samples @ 100ms = 3 seconds
-const REFUEL_DELTA_PCT = 10;
+const REFUEL_CONFIRM_SAMPLES = 50;   // 50 samples @ 100ms = 5 seconds
+const REFUEL_DELTA_PCT = 15;
 const STOPPED_SPEED_MPH = 3;
+const MAX_LEARN_STEP = 500;
 
 let stoppedBaselinePct = null;
 
@@ -83,15 +81,15 @@ function learnRawMinFull(raw) {
 
   // Limit how much it can learn at once so one ADC glitch
   // does not wreck your calibration.
-  const MAX_LEARN_STEP = 500;
-
-  if (raw < rawMin && rawMin - raw <= MAX_LEARN_STEP) {
+  if (raw < rawMin) {
+    const learnedRawMin = Math.max(raw, rawMin - MAX_LEARN_STEP);
     dbg("Learning new rawMin/full tank value", {
       oldRawMin: rawMin,
-      newRawMin: raw
+      observedRaw: raw,
+      newRawMin: learnedRawMin
     });
 
-    rawMin = Math.floor(raw);
+    rawMin = Math.floor(learnedRawMin);
     saveCalibration();
   }
 }
@@ -99,17 +97,6 @@ function learnRawMinFull(raw) {
 // ─────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────
-function injectorFlowAtPressureCcMin(fuelPsi) {
-  if (!Number.isFinite(fuelPsi) || fuelPsi <= 5) {
-    return INJ_RATED_CC; // fallback
-  }
-
-  // Clamp to sane range to avoid spikes
-  const psi = Math.max(20, Math.min(80, fuelPsi));
-
-  return INJ_RATED_CC * Math.sqrt(psi / INJ_RATED_PSI);
-}
-
 function safeAdd(acc, delta) {
   if (!Number.isFinite(delta) || delta <= 0) return acc;
   return acc + delta;
@@ -214,7 +201,7 @@ function maybeSaveUsed(val) {
 // ─────────────────────────────────────────────
 // ADS1115
 // ─────────────────────────────────────────────
-function readAds1115Raw(channel = 0) {
+async function readAds1115Raw(channel = 0) {
   const config =
     CONFIG_OS |
     MUX[channel] |
@@ -229,8 +216,9 @@ function readAds1115Raw(channel = 0) {
     Buffer.from([0x01, (config >> 8) & 0xff, config & 0xff])
   );
 
-  const start = process.hrtime.bigint();
-  while (process.hrtime.bigint() - start < 2_000_000n) {}
+  // Allow the ADS1115 conversion to complete without blocking CAN and
+  // WebSocket processing on Node's event loop.
+  await new Promise((resolve) => setTimeout(resolve, 2));
 
   const out = Buffer.alloc(2);
   bus.readI2cBlockSync(ADS1115_ADDR, 0x00, 2, out);
@@ -253,6 +241,8 @@ function rawToPercent(raw) {
 // STATE
 // ─────────────────────────────────────────────
 let lastFuelPct = loadFuelPct();
+let lastPersistedFuelPct = lastFuelPct;
+let lastFuelPctSaveTime = Date.now();
 let refuelCount = 0;
 let refuelLocked = false;
 
@@ -260,6 +250,26 @@ let gallonsSinceRefuel = loadUsed();
 let tripGallonsUsed = 0;
 
 let lastTime = Date.now();
+
+function saveFuelPctNow(pct) {
+  saveFuelPct(pct);
+  lastPersistedFuelPct = pct;
+  lastFuelPctSaveTime = Date.now();
+}
+
+function maybeSaveFuelPct(pct) {
+  const now = Date.now();
+  const elapsed = now - lastFuelPctSaveTime;
+  if (elapsed < FUEL_PCT_SAVE_MIN_MS) return;
+
+  const changedEnough =
+    lastPersistedFuelPct === null ||
+    Math.abs(pct - lastPersistedFuelPct) >= FUEL_PCT_SAVE_DELTA;
+
+  if (changedEnough || elapsed >= FUEL_PCT_SAVE_MAX_MS) {
+    saveFuelPctNow(pct);
+  }
+}
 
 // ─────────────────────────────────────────────
 // MAIN LOOP
@@ -280,7 +290,7 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
     dbg("🧪 Starting fake refill ramp");
   }
 
-  const interval = setInterval(() => {
+  const interval = setInterval(async () => {
     const now = Date.now();
     const dt = (now - lastTime) / 1000;
     lastTime = now;
@@ -293,17 +303,16 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
 
     if (pwMs > 0.5 && rpm > 500) {
       const fuelPsi = ecuDataStore.read(DATA_MAP.SENSOR2);
-
-      const injFlowCcMin = injectorFlowAtPressureCcMin(fuelPsi);
-
-      const injectionsPerSec = (rpm / 120) * 2; // 2 squirts per cycle
-      const ccPerInjection = (injFlowCcMin / 60) * (pwMs / 1000);
-
-      const gallonsPerSec =
-        (ccPerInjection * injectionsPerSec * NUM_INJECTORS) /
-        CC_PER_GALLON;
-
-      const delta = gallonsPerSec * dt;
+      const mapKpa = ecuDataStore.read(DATA_MAP.MAP) || 101.325;
+      const volts = ecuDataStore.read(DATA_MAP.VOLT) || 14.0;
+      const gallonsPerHour = computeFuelGPH(
+        pwMs,
+        rpm,
+        fuelPsi,
+        mapKpa,
+        volts
+      );
+      const delta = gallonsPerHour * (dt / 3600);
 
       gallonsSinceRefuel = safeAdd(gallonsSinceRefuel, delta);
       tripGallonsUsed    = safeAdd(tripGallonsUsed, delta);
@@ -324,7 +333,7 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
       raw = rawMax - (pct / 100) * (rawMax - rawMin);
     } else {
       try {
-        raw = readAds1115Raw(0);
+        raw = await readAds1115Raw(0);
       } catch {}
     }
 
@@ -341,6 +350,8 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
 
     if (!senderConnected) {
       lastFuelPct = null;
+      stoppedBaselinePct = null;
+      refuelCount = 0;
       ecuDataStore.write(DATA_MAP.FUEL_LEVEL, FUEL_INVALID);
       return;
     }
@@ -350,6 +361,9 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
     );
 
     if (percent === null) {
+      ecuDataStore.write(DATA_MAP.FUEL_SENDER_CONNECTED, 0);
+      stoppedBaselinePct = null;
+      refuelCount = 0;
       ecuDataStore.write(DATA_MAP.FUEL_LEVEL, FUEL_INVALID);
       return;
     }
@@ -357,29 +371,11 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
     const speed = ecuDataStore.read(DATA_MAP.SPEEDO) || 0;
     const stopped = speed < STOPPED_SPEED_MPH;
 
-    // Catches the common case where the truck is keyed off during refuel.
-    const startupDelta =
-      lastFuelPct !== null && stopped
-        ? percent - lastFuelPct
-        : 0;
-
-    if (
-      !refuelLocked &&
-      startupDelta >= REFUEL_DELTA_PCT &&
-      percent > REFUEL_MIN_PCT
-    ) {
-      refuelCount = REFUEL_CONFIRM_SAMPLES;
-
-      dbg("REFUEL startup jump", {
-        percent,
-        lastFuelPct,
-        startupDelta
-      });
-    }
-
     if (stopped) {
       if (stoppedBaselinePct === null) {
-        stoppedBaselinePct = percent;
+        // On startup, compare against the last persisted fuel percentage so a
+        // real key-off refill is detected, but still require sustained samples.
+        stoppedBaselinePct = lastFuelPct ?? percent;
       }
 
       const delta = percent - stoppedBaselinePct;
@@ -424,9 +420,9 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
 
       refuelCount = 0;
       stoppedBaselinePct = percent;
-      saveFuelPct(percent);
+      saveFuelPctNow(percent);
     } else if (stopped) {
-      saveFuelPct(percent);
+      maybeSaveFuelPct(percent);
     }
 
 		if (refuelLocked && stopped) {

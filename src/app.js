@@ -69,10 +69,11 @@ updateInterval = setInterval(() => {
       //file saving
       if (settings.ecu.persist) {
         savingUpdateInterval = setInterval(() => {
-          console.log('saving persistant data');
 
 					if (global.CAN?.iface === "vcan0") return;
 					if (process.env.TYPE === "development") return;
+
+          console.log('saving persistant data');
           appSettings.saveSettings(ecu.persistantData());
         }, SAVE_FREQ);
 
