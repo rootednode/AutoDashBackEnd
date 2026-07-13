@@ -24,12 +24,18 @@ const FUEL_PCT_SAVE_DELTA = 0.5;
 
 // Refuel detection
 const REFUEL_MIN_PCT  = 20;
-const REFUEL_CONFIRM_SAMPLES = 50;   // 50 samples @ 100ms = 5 seconds
-const REFUEL_DELTA_PCT = 15;
-const STOPPED_SPEED_MPH = 3;
+const REFUEL_DELTA_PCT = 25;
+const STOPPED_SPEED_MPH = 1;
+const REFUEL_STOPPED_MIN_MS = 30_000;
+const REFUEL_STABLE_WINDOW_MS = 10_000;
+const REFUEL_STABLE_MIN_SPAN_MS = 9_000;
+const REFUEL_STABLE_MIN_SAMPLES = 50;
+const REFUEL_STABLE_RANGE_PCT = 5;
 const MAX_LEARN_STEP = 500;
 
 let stoppedBaselinePct = null;
+let stoppedSince = null;
+const stoppedFuelSamples = [];
 
 // Sender
 const RAW_DISCONNECTED_THRESHOLD = 50;
@@ -243,7 +249,6 @@ function rawToPercent(raw) {
 let lastFuelPct = loadFuelPct();
 let lastPersistedFuelPct = lastFuelPct;
 let lastFuelPctSaveTime = Date.now();
-let refuelCount = 0;
 let refuelLocked = false;
 
 let gallonsSinceRefuel = loadUsed();
@@ -269,6 +274,49 @@ function maybeSaveFuelPct(pct) {
   if (changedEnough || elapsed >= FUEL_PCT_SAVE_MAX_MS) {
     saveFuelPctNow(pct);
   }
+}
+
+function resetStoppedRefuelObservation() {
+  stoppedBaselinePct = null;
+  stoppedSince = null;
+  stoppedFuelSamples.length = 0;
+}
+
+function median(values) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+
+  if (sorted.length % 2 === 0) {
+    return (sorted[middle - 1] + sorted[middle]) / 2;
+  }
+
+  return sorted[middle];
+}
+
+function getStableStoppedFuelPercent(now, percent) {
+  stoppedFuelSamples.push({ time: now, percent });
+
+  const windowStart = now - REFUEL_STABLE_WINDOW_MS;
+  while (
+    stoppedFuelSamples.length > 0 &&
+    stoppedFuelSamples[0].time < windowStart
+  ) {
+    stoppedFuelSamples.shift();
+  }
+
+  if (stoppedFuelSamples.length < REFUEL_STABLE_MIN_SAMPLES) return null;
+
+  const sampleSpan =
+    stoppedFuelSamples[stoppedFuelSamples.length - 1].time -
+    stoppedFuelSamples[0].time;
+  if (sampleSpan < REFUEL_STABLE_MIN_SPAN_MS) return null;
+
+  const percentages = stoppedFuelSamples.map((sample) => sample.percent);
+  const minPercent = Math.min(...percentages);
+  const maxPercent = Math.max(...percentages);
+  if (maxPercent - minPercent > REFUEL_STABLE_RANGE_PCT) return null;
+
+  return median(percentages);
 }
 
 // ─────────────────────────────────────────────
@@ -350,8 +398,7 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
 
     if (!senderConnected) {
       lastFuelPct = null;
-      stoppedBaselinePct = null;
-      refuelCount = 0;
+      resetStoppedRefuelObservation();
       ecuDataStore.write(DATA_MAP.FUEL_LEVEL, FUEL_INVALID);
       return;
     }
@@ -362,8 +409,7 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
 
     if (percent === null) {
       ecuDataStore.write(DATA_MAP.FUEL_SENDER_CONNECTED, 0);
-      stoppedBaselinePct = null;
-      refuelCount = 0;
+      resetStoppedRefuelObservation();
       ecuDataStore.write(DATA_MAP.FUEL_LEVEL, FUEL_INVALID);
       return;
     }
@@ -371,63 +417,68 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
     const speed = ecuDataStore.read(DATA_MAP.SPEEDO) || 0;
     const stopped = speed < STOPPED_SPEED_MPH;
 
-    if (stopped) {
-      if (stoppedBaselinePct === null) {
-        // On startup, compare against the last persisted fuel percentage so a
-        // real key-off refill is detected, but still require sustained samples.
-        stoppedBaselinePct = lastFuelPct ?? percent;
+    if (!stopped) {
+      resetStoppedRefuelObservation();
+      refuelLocked = false;
+    } else {
+      if (stoppedSince === null) {
+        stoppedSince = now;
+        // On startup this is the persisted pre-refill percentage. During
+        // normal operation it is the most recent reading before stopping.
+        stoppedBaselinePct = Number.isFinite(lastFuelPct)
+          ? lastFuelPct
+          : percent;
       }
 
-      const delta = percent - stoppedBaselinePct;
+      const stableFuelPct = getStableStoppedFuelPercent(now, percent);
+      const stoppedLongEnough =
+        now - stoppedSince >= REFUEL_STOPPED_MIN_MS;
+      const refillDelta =
+        stableFuelPct === null ? 0 : stableFuelPct - stoppedBaselinePct;
 
       dbg("REFUEL chk", {
         percent,
+        stableFuelPct,
         stoppedBaselinePct,
-        delta,
-        refuelCount,
+        refillDelta,
+        stoppedLongEnough,
         refuelLocked
       });
 
       if (
         !refuelLocked &&
-        delta >= REFUEL_DELTA_PCT &&
-        percent > REFUEL_MIN_PCT
+        stoppedLongEnough &&
+        stableFuelPct !== null &&
+        refillDelta >= REFUEL_DELTA_PCT &&
+        stableFuelPct > REFUEL_MIN_PCT
       ) {
-        refuelCount++;
-      } else {
-        refuelCount = Math.max(0, refuelCount - 1);
+        gallonsSinceRefuel = 0;
+        tripGallonsUsed    = 0;
+        lastSavedGallons   = 0;
+        refuelLocked = true;
+
+        ecuDataStore.write(DATA_MAP.FUEL_GALLONS_SINCE_REFILL, 0);
+        ecuDataStore.write(DATA_MAP.FUEL_GALLONS_USED, 0);
+
+        saveUsed(0);
+        learnRawMinFull(raw);
+
+        console.info("[FUEL] Refuel detected — counters reset", {
+          previousPercent: stoppedBaselinePct,
+          currentPercent: stableFuelPct,
+          increasePercent: refillDelta
+        });
+
+        stoppedBaselinePct = stableFuelPct;
+        saveFuelPctNow(stableFuelPct);
+      } else if (stableFuelPct !== null) {
+        maybeSaveFuelPct(stableFuelPct);
       }
-    } else {
-      stoppedBaselinePct = null;
-      refuelCount = 0;
-      refuelLocked = false;
+
+      if (refuelLocked && stableFuelPct !== null) {
+        learnRawMinFull(raw);
+      }
     }
-
-    if (refuelCount >= REFUEL_CONFIRM_SAMPLES) {
-      gallonsSinceRefuel = 0;
-      tripGallonsUsed    = 0;
-      lastSavedGallons   = 0;
-      refuelLocked = true;
-
-      ecuDataStore.write(DATA_MAP.FUEL_GALLONS_SINCE_REFILL, 0);
-      ecuDataStore.write(DATA_MAP.FUEL_GALLONS_USED, 0);
-
-      saveUsed(0);
-
-		  learnRawMinFull(raw);
-
-      dbg("⛽ Refuel detected — counters reset");
-
-      refuelCount = 0;
-      stoppedBaselinePct = percent;
-      saveFuelPctNow(percent);
-    } else if (stopped) {
-      maybeSaveFuelPct(percent);
-    }
-
-		if (refuelLocked && stopped) {
-		  learnRawMinFull(raw);
-		}
 
     lastFuelPct = percent;
 
