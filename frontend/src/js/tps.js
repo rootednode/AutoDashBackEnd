@@ -1,3 +1,5 @@
+import { colorForGaugeValue, setGaugeReading } from "./common/gaugeColor";
+
 export default {
 
   initialize: function () {
@@ -24,7 +26,7 @@ export default {
     var gauge = this.update.g;
 
     if (noComm) {
-      gauge.update({ value: 0, valueText: "null" });
+      setGaugeReading(gauge, { value: 0, valueText: "null" });
       return;
     }
 
@@ -37,11 +39,14 @@ export default {
       tps = Number(tps);
       if (!Number.isFinite(tps)) tps = 0;
 
-      gauge.update({ value: tps, valueText: tps });
+      setGaugeReading(gauge, {
+        value: tps,
+        valueText: tps,
+        colorBarProgress: colorForGaugeValue(gauge, tps)
+      });
 
     } catch (error) {
       console.log(error);
     }
   }
 };
-

@@ -4,6 +4,8 @@ import CanbusManager from './CAN/canbusManager.js'
 import ecuManager from './ecuManager.js'
 import { appSettingsManager } from './appSettingsManager.js'
 import DashContentWebServer from './webserver.js'
+import { DATA_MAP } from './dataKeys.js'
+import { vehicleTimeMs } from './CAN/canTime.js'
 
 import fs from 'fs';
 import path from 'path';
@@ -33,6 +35,21 @@ export default function (canChannel, settings) {
   const webserver = new DashContentWebServer('dist', 'index.html');
   let updateInterval = null;
   let savingUpdateInterval = null;
+  const analysisCanIds = new Set([0x5F5, 0x5F7, 0x60F]);
+
+  const updateFromCan = (message) => {
+    ecu.updateFromCanBus(message);
+    if (!message || !analysisCanIds.has(message.id & 0x7FF)) return;
+    const canId = message.id & 0x7FF;
+    dashComms.analysisUpdate({
+      source: canId === 0x5F5 ? 'ae' : (canId === 0x5F7 ? 'tpsDot' : 'afr'),
+      timestampMs: vehicleTimeMs(message),
+      aeAmount: ecu.readValue(DATA_MAP.AE_AMOUNT),
+      eae1: ecu.readValue(DATA_MAP.EAE1),
+      tpsDot: ecu.readValue(DATA_MAP.TPS_DOT),
+      afr: ecu.readValue(DATA_MAP.AFR)
+    });
+  };
 
   const startApp = () => {
     try {
@@ -41,7 +58,7 @@ export default function (canChannel, settings) {
       const persistantData = appSettings.init();
       ecu.init(persistantData);
       dashComms.start();
-      canComms.start(ecu.updateFromCanBus);
+      canComms.start(updateFromCan);
       
 //      if (settings.gps.enabled) {
 //        gps.start(ecu.updateFromGPS);
@@ -128,6 +145,7 @@ updateInterval = setInterval(() => {
      */
     start: startApp,
     stop: stopApp,
+    onDashboardConnected: (callback) => dashComms.onNextConnection(callback),
   }
 
   return app;

@@ -1,3 +1,8 @@
+import {
+  blendedColorForGaugeValue,
+  setGaugeReading
+} from "./common/gaugeColor";
+
 export default {
 
 initialize: function () {
@@ -24,7 +29,10 @@ initialize: function () {
     var gauge = this.update.g;
 
     if (noComm) {
-      gauge.update({ value: 0, colorBarProgress: "rgba(0,250,0,.75)" });
+      setGaugeReading(gauge, {
+        value: 0,
+        colorBarProgress: "rgba(0,250,0,.75)"
+      });
       return;
     }
 
@@ -37,20 +45,9 @@ initialize: function () {
       rpm = Number(rpm);
       if (!Number.isFinite(rpm)) rpm = 0;
 
-      // Default color (green)
-      var rpmcolor = "rgba(0, 250, 0, .75)";
-
-      // Update color depending on RPM range
-      if (rpm >= 5200) {
-        rpmcolor = "rgba(250, 0, 0, .75)";      // red
-      } else if (rpm >= 4600) {
-        rpmcolor = "rgba(250, 250, 0, .75)";    // yellow
-      }
-
-      // Update the gauge value and the bar color
-      gauge.update({
+      setGaugeReading(gauge, {
         value: rpm,
-        colorBarProgress: rpmcolor
+        colorBarProgress: blendedColorForGaugeValue(gauge, rpm)
       });
 
     } catch (error) {
@@ -58,4 +55,3 @@ initialize: function () {
     }
   }
 };
-

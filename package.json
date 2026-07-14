@@ -4,10 +4,13 @@
   "version": "2.0.0",
   "private": true,
   "scripts": {
-    "init_and_start_vcan_server": "./RPI_system/start_vcan.sh && npm run test_server",
-    "start_vcan_server": "NODE_ENV=production CHANNEL=vcan0 TYPE=live node index.js",
-    "can_server": "NODE_ENV=production TYPE=live node index.js",
-    "test_server": "NODE_ENV=development TYPE=development CHANNEL=vcan0 node index.js"
+    "help": "node scripts/npm-help.js",
+    "init_and_start_vcan_server": "echo 'Creates/configures vcan0, then starts the development dashboard. See: npm run help' && ./RPI_system/start_vcan.sh && npm run test_server",
+    "start_vcan_server": "echo 'Starts the production dashboard listening on vcan0. See: npm run help' && NODE_ENV=production CHANNEL=vcan0 TYPE=live node index.js",
+    "can_server": "echo 'Starts the production dashboard using the auto-detected vehicle CAN interface. See: npm run help' && NODE_ENV=production TYPE=live node index.js",
+    "test_server": "echo 'Starts the development dashboard on vcan0 without creating the interface. See: npm run help' && NODE_ENV=development TYPE=development CHANNEL=vcan0 node index.js",
+    "replay_logs": "echo 'Replays all logs or one named log after the dashboard connects (default 10x). Run npm run replay_logs:help.' && NODE_ENV=production STARTUP_MODE=replay_logs node index.js",
+    "replay_logs:help": "node scripts/replay-logs-help.js"
   },
   "author": "Michael J Mathews II",
   "dependencies": {

@@ -1,3 +1,5 @@
+import { colorForGaugeValue, setGaugeReading } from "./common/gaugeColor";
+
 export default {
 
   initialize: function () {
@@ -40,12 +42,18 @@ if (this.update.s4_g)  this.update.s4_g.update({ value: 0, valueText: "null" });
     var s1g2 = this.update.s1_g2;
 
     if (noComm) {
-      if (s1g1) s1g1.update({ value: 0 });
-      if (s1g2) s1g2.update({ value: 0 });
+      setGaugeReading(s1g1, { value: 0 });
+      setGaugeReading(s1g2, { value: 0 });
     } else {
       sensor1 = Number(sensor1); if (!Number.isFinite(sensor1)) sensor1 = 0;
-      if (s1g1) s1g1.update({ value: sensor1 });
-      if (s1g2) s1g2.update({ value: sensor1 });
+      setGaugeReading(s1g1, {
+        value: sensor1,
+        colorBarProgress: colorForGaugeValue(s1g1, sensor1)
+      });
+      setGaugeReading(s1g2, {
+        value: sensor1,
+        colorBarProgress: colorForGaugeValue(s1g2, sensor1)
+      });
     }
 
 
@@ -59,10 +67,14 @@ if (this.update.s4_g)  this.update.s4_g.update({ value: 0, valueText: "null" });
     var s2g = this.update.s2_g;
 
     if (noComm) {
-      if (s2g) s2g.update({ value: 0, valueText: "null" });
+      setGaugeReading(s2g, { value: 0, valueText: "null" });
     } else {
       sensor2 = Number(sensor2); if (!Number.isFinite(sensor2)) sensor2 = 0;
-      if (s2g) s2g.update({ value: sensor2, valueText: sensor2 });
+      setGaugeReading(s2g, {
+        value: sensor2,
+        valueText: sensor2,
+        colorBarProgress: colorForGaugeValue(s2g, sensor2)
+      });
     }
 
 
@@ -76,17 +88,14 @@ if (this.update.s4_g)  this.update.s4_g.update({ value: 0, valueText: "null" });
     var s3g = this.update.s3_g;
 
     if (noComm) {
-      if (s3g) s3g.update({ value: 0, valueText: "null" });
+      setGaugeReading(s3g, { value: 0, valueText: "null" });
     } else {
       sensor3 = Number(sensor3); if (!Number.isFinite(sensor3)) sensor3 = 0;
 
-      var clamped = sensor3;
-      if (clamped < 170) clamped = 170;
-      if (clamped > 230) clamped = 230;
-
-      if (s3g) s3g.update({
-        value: clamped,
-        valueText: String(sensor3)
+      setGaugeReading(s3g, {
+        value: sensor3,
+        valueText: String(sensor3),
+        colorBarProgress: colorForGaugeValue(s3g, sensor3)
       });
     }
 
@@ -101,11 +110,14 @@ if (this.update.s4_g)  this.update.s4_g.update({ value: 0, valueText: "null" });
     var s4g = this.update.s4_g;
 
     if (noComm) {
-      if (s4g) s4g.update({ value: 0, valueText: "null" });
+      setGaugeReading(s4g, { value: 0, valueText: "null" });
     } else {
       sensor4 = Number(sensor4); if (!Number.isFinite(sensor4)) sensor4 = 0;
-      if (s4g) s4g.update({ value: sensor4, valueText: sensor4 });
+      setGaugeReading(s4g, {
+        value: sensor4,
+        valueText: sensor4,
+        colorBarProgress: colorForGaugeValue(s4g, sensor4)
+      });
     }
   }
 };
-

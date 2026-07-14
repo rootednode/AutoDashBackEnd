@@ -5,6 +5,7 @@ import { computeEcoBar } from "./ecoBar.js";
 import { DATA_MAP, WARNING_KEYS } from "./dataKeys.js";
 import DataStore from "./DataStore.js";
 import RingBuffer from "./lib/ringBuffer.js";
+import { vehicleTimeMs } from "./CAN/canTime.js";
 //import ButtonManager from "./IO/Buttons.js";
 //import piShutdown from "./IO/piShutdown.js";
 
@@ -59,10 +60,15 @@ export default (carSettings, canChannel) => {
 		initializeOdometer(odometer);
 
 		if (stopFuelLevelUpdater) stopFuelLevelUpdater();
-		stopFuelLevelUpdater = fuelLevelUpdater(ecuDataStore, () => {
-  // intentionally empty
-  // fuel updates must NOT mark CAN as fresh
-});
+			if (process.env.STARTUP_MODE !== "replay_logs") {
+			stopFuelLevelUpdater = fuelLevelUpdater(ecuDataStore, () => {
+	  // intentionally empty
+	  // fuel updates must NOT mark CAN as fresh
+	});
+			} else {
+				ecuDataStore.write(DATA_MAP.FUEL_GALLONS_USED, 0);
+				ecuDataStore.write(DATA_MAP.FUEL_GALLONS_SINCE_REFILL, 0);
+			}
 
 
 
@@ -122,7 +128,7 @@ export default (carSettings, canChannel) => {
 				);
 
 
-    const eco = computeEcoBar(ecuDataStore);
+    const eco = computeEcoBar(ecuDataStore, vehicleTimeMs(msg));
 
     if (eco) {
       ecuDataStore.write(DATA_MAP.ECO, eco.eco_pct);
@@ -189,6 +195,8 @@ export default (carSettings, canChannel) => {
 			// fresh enough - safe to send
 			return ecuDataStore.buffer; // see todo in DataStore.js:write
 		},
+
+		readValue: (dataKey) => ecuDataStore.read(dataKey),
 
 		persistantData: () => {
 			return {

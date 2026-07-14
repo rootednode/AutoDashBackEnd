@@ -33,7 +33,11 @@ export function logCAN(msg) {
 
     const timestamp = `(${ts_sec}.${ts_usec.toString().padStart(6, '0')})`;
     const hex = Buffer.from(data).toString('hex').toUpperCase();
-    const idHex = id.toString(16).toUpperCase();
+    // can-utils' compact frame format requires an exact-width CAN ID:
+    // three hex digits for standard frames and eight for extended frames.
+    const extended = msg.ext === true || id > 0x7FF;
+    const idWidth = extended ? 8 : 3;
+    const idHex = id.toString(16).toUpperCase().padStart(idWidth, '0');
 
     const line = `${timestamp} can0 ${idHex}#${hex}\n`;
     logStream.write(line);
@@ -57,4 +61,3 @@ export function closeCANLog() {
   logPath = null;
   hasWritten = false;
 }
-

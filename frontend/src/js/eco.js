@@ -1,3 +1,5 @@
+import { colorForGaugeValue, setGaugeReading } from "./common/gaugeColor";
+
 export default {
 
   initialize: function () {
@@ -23,7 +25,7 @@ export default {
     var gauge = this.update.g;
 
     if (noComm) {
-      gauge.update({ value: 0, valueText: "0" });
+      setGaugeReading(gauge, { value: 0, valueText: "0" });
       return;
     }
 
@@ -33,9 +35,10 @@ export default {
       eco = Number(eco);
       if (!Number.isFinite(eco)) eco = 0;
 
-      gauge.update({
+      setGaugeReading(gauge, {
         value: eco,       // needle
-        valueText: String(eco) // real value text
+        valueText: String(eco), // real value text
+        colorBarProgress: colorForGaugeValue(gauge, eco)
       });
 
     } catch (error) {
@@ -43,4 +46,3 @@ export default {
     }
   }
 };
-

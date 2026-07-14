@@ -86,6 +86,11 @@ export const DATA_MAP = {
   HV_BATT_VOLTAGE: { id: keygen(), byteType: TYPES.FLOAT },
   SOME_NEW_VALUE: { id: keygen(), byteType: TYPES.UINT32 },
 
+  IDLE_POSITION: { id: keygen(), byteType: TYPES.UINT16 },
+  AE_AMOUNT: { id: keygen(), byteType: TYPES.FLOAT },
+  TPS_DOT: { id: keygen(), byteType: TYPES.FLOAT },
+  EAE1: { id: keygen(), byteType: TYPES.FLOAT },
+
 }; // END DATA_MAP
 
 

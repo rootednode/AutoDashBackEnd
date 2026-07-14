@@ -36,6 +36,13 @@ function ensureWS() {
 
   ws.onmessage = (evt) => {
     try {
+      if (typeof evt.data === "string") {
+        const message = JSON.parse(evt.data);
+        if (message.type === "analysis_sample") {
+          postMessage({ msg: "analysis_sample", sample: message });
+        }
+        return;
+      }
       const view = new DataView(evt.data);
       dataStore.deserialize(view);
 

@@ -81,6 +81,11 @@ export const DATA_MAP = {
   ///
   HV_BATT_VOLTAGE: { id: keygen(), byteType: TYPES.FLOAT }, // xx.x volts
   SOME_NEW_VALUE: { id: keygen(), byteType: TYPES.UINT32 },
+
+  IDLE_POSITION: { id: keygen(), byteType: TYPES.UINT16 }, // step count or PWM duty raw value
+  AE_AMOUNT: { id: keygen(), byteType: TYPES.FLOAT }, // TPS acceleration enrichment, %
+  TPS_DOT: { id: keygen(), byteType: TYPES.FLOAT }, // throttle position rate, %/s
+  EAE1: { id: keygen(), byteType: TYPES.FLOAT }, // EAE fuel correction channel 1, %
 };
 Object.freeze(DATA_MAP);
 

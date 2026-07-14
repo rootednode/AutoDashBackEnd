@@ -1,3 +1,5 @@
+import { colorForGaugeValue, setGaugeReading } from "./common/gaugeColor";
+
 export default {
   initialize: function () {
     this.update.g = document.gauges.get("fuellevelgauge");
@@ -43,19 +45,21 @@ export default {
 
     try {
       if (!fuelValid) {
-        gauge.update({ valueText: "null" });
+        setGaugeReading(gauge, { valueText: "null" });
         return;
       }
 
       // An empty valueText restores the gauge's normal numeric display after
       // a sender or communications failure.
-      gauge.update({ value: fuel, valueText: "" });
+      setGaugeReading(gauge, {
+        value: fuel,
+        valueText: "",
+        colorBarProgress: colorForGaugeValue(gauge, fuel)
+      });
     } catch (error) {
       console.log(error);
     }
   }
 };
-
-
 
 

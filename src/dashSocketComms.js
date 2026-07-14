@@ -9,6 +9,7 @@ class DashSocketComms {
 
     // ⭐ Use a Set instead of an array (fixes stale/dead sockets)
     this.sockets = new Set();
+    this.connectionListeners = new Set();
 
     // --------------------------
     //  WebSocket Event Handlers
@@ -17,6 +18,8 @@ class DashSocketComms {
     this.open = (ws) => {
       console.log("AutoDash: WebSocket connected from a dashboard!");
       this.sockets.add(ws);
+      for (const listener of this.connectionListeners) listener();
+      this.connectionListeners.clear();
     };
 
     this.message = (ws, message, isBinary) => {
@@ -49,6 +52,10 @@ class DashSocketComms {
     });
   }
 
+  onNextConnection(listener) {
+    this.connectionListeners.add(listener);
+  }
+
   // ------------------------------------------------------------
   //  Send CAN frames to all connected dashboards
   // ------------------------------------------------------------
@@ -63,6 +70,17 @@ class DashSocketComms {
         ws.send(data, true);  // binary = true
       } catch (e) {
         console.warn("Removing dead WebSocket:", e);
+        this.sockets.delete(ws);
+      }
+    }
+  }
+
+  analysisUpdate(sample) {
+    const message = JSON.stringify({ type: "analysis_sample", ...sample });
+    for (const ws of this.sockets) {
+      try {
+        ws.send(message, false);
+      } catch (error) {
         this.sockets.delete(ws);
       }
     }
@@ -101,4 +119,3 @@ class DashSocketComms {
 }
 
 export default DashSocketComms;
-

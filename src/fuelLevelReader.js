@@ -32,13 +32,25 @@ const REFUEL_STABLE_MIN_SPAN_MS = 9_000;
 const REFUEL_STABLE_MIN_SAMPLES = 50;
 const REFUEL_STABLE_RANGE_PCT = 5;
 const MAX_LEARN_STEP = 500;
+const CAL_LEARN_WINDOW_MS = 20_000;
+const CAL_LEARN_MIN_SPAN_MS = 19_000;
+const CAL_LEARN_MIN_SAMPLES = 150;
+const CAL_LEARN_MAX_RAW_RANGE = 150;
+const CAL_LEARN_FULL_PCT = 95;
+const OBSERVED_RAW_MAX_SAVE_MS = 30_000;
 
 let stoppedBaselinePct = null;
 let stoppedSince = null;
 const stoppedFuelSamples = [];
+const calibrationSamples = [];
 
 // Sender
-const RAW_DISCONNECTED_THRESHOLD = 50;
+// The sender reads lower as the tank fills. Do not use a positive cutoff here:
+// valid full-tank readings can fall close to zero and were being mistaken for
+// an open sender. Zero/negative ADS1115 readings still identify the unpowered
+// or disconnected circuit, after the confirmation delay below.
+const RAW_DISCONNECTED_THRESHOLD = 0;
+const SENDER_DISCONNECT_CONFIRM_MS = 1_500;
 const FUEL_INVALID = -1;
 
 // Smoother
@@ -67,37 +79,21 @@ function saveCalibration() {
   if (global.CAN?.iface === "vcan0") return;
   if (process.env.TYPE === "development") return;
 
-  fs.writeFileSync(
-    CAL_FILE,
-    JSON.stringify({
-      _comment: "rawMin = full tank, rawMax = empty tank",
-      rawMin,
-      rawMax
-    }, null, 2)
-  );
-}
+  const calibrationJson = JSON.stringify({
+    _comment: "rawMin/rawMax calibrate the gauge; observedRawMax is the highest valid smoothed reading seen",
+    rawMin,
+    rawMax,
+    observedRawMin,
+    observedRawMax,
+    observedRawMaxAt,
+    rawMinLearnedAt,
+    rawMaxLearnedAt,
+    lastStableObservationAt
+  }, null, 2);
+  const tempFile = `${CAL_FILE}.tmp`;
 
-
-function learnRawMinFull(raw) {
-  if (!Number.isFinite(raw)) return;
-
-  // rawMin is full. Lower raw = more full.
-  // Do not learn disconnected/glitch values.
-  if (raw < RAW_DISCONNECTED_THRESHOLD) return;
-
-  // Limit how much it can learn at once so one ADC glitch
-  // does not wreck your calibration.
-  if (raw < rawMin) {
-    const learnedRawMin = Math.max(raw, rawMin - MAX_LEARN_STEP);
-    dbg("Learning new rawMin/full tank value", {
-      oldRawMin: rawMin,
-      observedRaw: raw,
-      newRawMin: learnedRawMin
-    });
-
-    rawMin = Math.floor(learnedRawMin);
-    saveCalibration();
-  }
+  fs.writeFileSync(tempFile, calibrationJson);
+  fs.renameSync(tempFile, CAL_FILE);
 }
 
 // ─────────────────────────────────────────────
@@ -147,8 +143,26 @@ function loadCalibration() {
   return cal;
 }
 
-let { rawMin, rawMax } = loadCalibration();
-dbg("Calibration", { rawMin, rawMax });
+const calibration = loadCalibration();
+let { rawMin, rawMax } = calibration;
+let observedRawMin = Number.isFinite(calibration.observedRawMin)
+  ? calibration.observedRawMin
+  : null;
+let observedRawMax = Number.isFinite(calibration.observedRawMax)
+  ? calibration.observedRawMax
+  : null;
+let observedRawMaxAt = calibration.observedRawMaxAt || null;
+let rawMinLearnedAt = calibration.rawMinLearnedAt || null;
+let rawMaxLearnedAt = calibration.rawMaxLearnedAt || null;
+let lastStableObservationAt = calibration.lastStableObservationAt || null;
+let observedRawMaxDirty = false;
+let lastObservedRawMaxSaveTime = 0;
+dbg("Calibration", {
+  rawMin,
+  rawMax,
+  observedRawMin,
+  observedRawMax
+});
 
 // ─────────────────────────────────────────────
 // PERSISTENCE
@@ -250,6 +264,7 @@ let lastFuelPct = loadFuelPct();
 let lastPersistedFuelPct = lastFuelPct;
 let lastFuelPctSaveTime = Date.now();
 let refuelLocked = false;
+let senderInvalidSince = null;
 
 let gallonsSinceRefuel = loadUsed();
 let tripGallonsUsed = 0;
@@ -293,6 +308,118 @@ function median(values) {
   return sorted[middle];
 }
 
+function resetCalibrationObservation() {
+  calibrationSamples.length = 0;
+}
+
+function moveToward(current, target, maxStep) {
+  const delta = Math.max(-maxStep, Math.min(maxStep, target - current));
+  return Math.round(current + delta);
+}
+
+function trackHighestRawSeen(now, raw) {
+  if (!Number.isFinite(raw)) return;
+
+  const candidate = Math.round(raw);
+  if (observedRawMax !== null && candidate <= observedRawMax) return;
+
+  observedRawMax = candidate;
+  observedRawMaxAt = new Date(now).toISOString();
+  observedRawMaxDirty = true;
+
+  if (now - lastObservedRawMaxSaveTime >= OBSERVED_RAW_MAX_SAVE_MS) {
+    saveCalibration();
+    observedRawMaxDirty = false;
+    lastObservedRawMaxSaveTime = now;
+  }
+}
+
+function flushObservedRawMax(now) {
+  if (!observedRawMaxDirty) return;
+  if (now - lastObservedRawMaxSaveTime < OBSERVED_RAW_MAX_SAVE_MS) return;
+
+  saveCalibration();
+  observedRawMaxDirty = false;
+  lastObservedRawMaxSaveTime = now;
+}
+
+function learnStableCalibration(
+  now,
+  raw,
+  stopped,
+  percent,
+  refuelConfirmed
+) {
+  if (!stopped || !Number.isFinite(raw)) {
+    resetCalibrationObservation();
+    return;
+  }
+
+  calibrationSamples.push({ time: now, raw });
+
+  const windowStart = now - CAL_LEARN_WINDOW_MS;
+  while (
+    calibrationSamples.length > 0 &&
+    calibrationSamples[0].time < windowStart
+  ) {
+    calibrationSamples.shift();
+  }
+
+  if (calibrationSamples.length < CAL_LEARN_MIN_SAMPLES) return;
+
+  const sampleSpan =
+    calibrationSamples[calibrationSamples.length - 1].time -
+    calibrationSamples[0].time;
+  if (sampleSpan < CAL_LEARN_MIN_SPAN_MS) return;
+
+  const values = calibrationSamples.map((sample) => sample.raw);
+  const minRaw = Math.min(...values);
+  const maxRaw = Math.max(...values);
+  if (maxRaw - minRaw > CAL_LEARN_MAX_RAW_RANGE) return;
+
+  const stableRaw = Math.round(median(values));
+  const observedAt = new Date(now).toISOString();
+  let changed = false;
+
+  if (observedRawMin === null || stableRaw < observedRawMin) {
+    observedRawMin = stableRaw;
+    changed = true;
+  }
+  const canLearnFull = refuelConfirmed && percent >= CAL_LEARN_FULL_PCT;
+
+  if (canLearnFull && stableRaw !== rawMin) {
+    const previousRawMin = rawMin;
+    const targetRawMin = Math.min(stableRaw, rawMax - 1);
+    rawMin = moveToward(rawMin, targetRawMin, MAX_LEARN_STEP);
+    rawMinLearnedAt = observedAt;
+    changed = true;
+    dbg("Learned full-tank raw value", {
+      previousRawMin,
+      stableRaw,
+      rawMin
+    });
+  }
+
+  if (stableRaw > rawMax) {
+    const previousRawMax = rawMax;
+    rawMax = moveToward(rawMax, stableRaw, MAX_LEARN_STEP);
+    rawMaxLearnedAt = observedAt;
+    changed = true;
+    dbg("Learned higher empty-tank raw value", {
+      previousRawMax,
+      stableRaw,
+      rawMax
+    });
+  }
+
+  lastStableObservationAt = observedAt;
+  if (changed) saveCalibration();
+
+  // Require another complete stable period before making another endpoint
+  // adjustment. This prevents a long stop from rapidly walking a bound.
+  resetCalibrationObservation();
+}
+
 function getStableStoppedFuelPercent(now, percent) {
   stoppedFuelSamples.push({ time: now, percent });
 
@@ -326,6 +453,14 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
   ecuDataStore.write(DATA_MAP.FUEL_GALLONS_SINCE_REFILL, gallonsSinceRefuel);
   ecuDataStore.write(DATA_MAP.FUEL_GALLONS_USED, tripGallonsUsed);
 
+  // Keep the last trustworthy reading on screen while the ADC and sender
+  // power settle after startup. A sustained invalid signal below will still
+  // replace it with the disconnected state.
+  if (Number.isFinite(lastFuelPct)) {
+    ecuDataStore.write(DATA_MAP.FUEL_LEVEL, lastFuelPct);
+    ecuDataStore.write(DATA_MAP.FUEL_SENDER_CONNECTED, 1);
+  }
+
   if (process.env.TYPE === "development" && testRefillStart === 0) {
     testRefillStart = Date.now();
     testRefillActive = true;
@@ -338,7 +473,13 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
     dbg("🧪 Starting fake refill ramp");
   }
 
+  let sampleInFlight = false;
+
   const interval = setInterval(async () => {
+    if (sampleInFlight) return;
+    sampleInFlight = true;
+
+    try {
     const now = Date.now();
     const dt = (now - lastTime) / 1000;
     lastTime = now;
@@ -372,36 +513,46 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
     }
 
     // ────────── FUEL SENDER ──────────
-    let raw;
+    let rawSample;
 
     if (process.env.TYPE === "development") {
       const pct = getTestFuelPercent(now);
 
       // convert percent → fake raw value
-      raw = rawMax - (pct / 100) * (rawMax - rawMin);
+      rawSample = rawMax - (pct / 100) * (rawMax - rawMin);
     } else {
       try {
-        raw = await readAds1115Raw(0);
+        rawSample = await readAds1115Raw(0);
       } catch {}
     }
 
-    raw = smoothMA(raw);
+    // Judge connectivity from the actual sample, not the moving average.
+    // Failed reads and key-off zeroes must never poison the smoothing window,
+    // otherwise one intermittent I2C error can hold the gauge at null.
+    const validSenderSample =
+      Number.isFinite(rawSample) &&
+      rawSample > RAW_DISCONNECTED_THRESHOLD;
 
-    const senderConnected =
-      Number.isFinite(raw) &&
-      raw >= RAW_DISCONNECTED_THRESHOLD;
+    if (!validSenderSample) {
+      if (senderInvalidSince === null) senderInvalidSince = now;
 
-    ecuDataStore.write(
-      DATA_MAP.FUEL_SENDER_CONNECTED,
-      senderConnected ? 1 : 0
-    );
+      if (now - senderInvalidSince < SENDER_DISCONNECT_CONFIRM_MS) return;
 
-    if (!senderConnected) {
-      lastFuelPct = null;
+      ecuDataStore.write(DATA_MAP.FUEL_SENDER_CONNECTED, 0);
       resetStoppedRefuelObservation();
+      resetCalibrationObservation();
+      window.length = 0;
       ecuDataStore.write(DATA_MAP.FUEL_LEVEL, FUEL_INVALID);
       return;
     }
+
+    senderInvalidSince = null;
+    ecuDataStore.write(DATA_MAP.FUEL_SENDER_CONNECTED, 1);
+
+    const raw = smoothMA(rawSample);
+
+    trackHighestRawSeen(now, raw);
+    flushObservedRawMax(now);
 
     const percent = rawToPercent(
       Math.max(rawMin, Math.min(raw, rawMax))
@@ -410,12 +561,20 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
     if (percent === null) {
       ecuDataStore.write(DATA_MAP.FUEL_SENDER_CONNECTED, 0);
       resetStoppedRefuelObservation();
+      resetCalibrationObservation();
       ecuDataStore.write(DATA_MAP.FUEL_LEVEL, FUEL_INVALID);
       return;
     }
 
     const speed = ecuDataStore.read(DATA_MAP.SPEEDO) || 0;
     const stopped = speed < STOPPED_SPEED_MPH;
+    learnStableCalibration(
+      now,
+      raw,
+      stopped,
+      percent,
+      refuelLocked
+    );
 
     if (!stopped) {
       resetStoppedRefuelObservation();
@@ -461,7 +620,6 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
         ecuDataStore.write(DATA_MAP.FUEL_GALLONS_USED, 0);
 
         saveUsed(0);
-        learnRawMinFull(raw);
 
         console.info("[FUEL] Refuel detected — counters reset", {
           previousPercent: stoppedBaselinePct,
@@ -475,9 +633,6 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
         maybeSaveFuelPct(stableFuelPct);
       }
 
-      if (refuelLocked && stableFuelPct !== null) {
-        learnRawMinFull(raw);
-      }
     }
 
     lastFuelPct = percent;
@@ -486,6 +641,9 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
     ecuDataStore.write(DATA_MAP.ADC1, raw);
 
     markFresh();
+    } finally {
+      sampleInFlight = false;
+    }
   }, SAMPLE_MS);
 
   return () => clearInterval(interval);

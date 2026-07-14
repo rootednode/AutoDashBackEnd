@@ -1,3 +1,5 @@
+import { colorForGaugeValue, setGaugeReading } from "./common/gaugeColor";
+
 export default {
 
   initialize: function () {
@@ -23,7 +25,7 @@ export default {
     var gauge = this.update.g;
 
     if (noComm) {
-      gauge.update({ value: 0, valueText: "null"  });
+      setGaugeReading(gauge, { value: 0, valueText: "null" });
       return;
     }
 
@@ -38,7 +40,11 @@ export default {
       // AFR scaling (your original: afr = afr / 10)
       afr = afr / 10;
 
-      gauge.update({ value: afr, valueText: afr });
+      setGaugeReading(gauge, {
+        value: afr,
+        valueText: afr,
+        colorBarProgress: colorForGaugeValue(gauge, afr)
+      });
 
     } catch (error) {
       console.log(error);
@@ -55,4 +61,3 @@ export default {
 
   }
 };
-

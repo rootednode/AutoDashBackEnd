@@ -1,3 +1,5 @@
+import { colorForGaugeValue, setGaugeReading } from "./common/gaugeColor";
+
 export default {
 
   initialize: function () {
@@ -40,8 +42,8 @@ export default {
     var gauge2 = this.update.g2;
 
     if (noComm) {
-      gauge.update({ value: 0, valueText: "null" });
-      gauge2.update({ value: 0, valueText: "null" });
+      setGaugeReading(gauge, { value: 0, valueText: "null" });
+      setGaugeReading(gauge2, { value: 0, valueText: "null" });
       return;
     }
 
@@ -53,22 +55,17 @@ export default {
       map = Number(map);
       if (!Number.isFinite(map)) map = 0;
 
-      // ---- CLAMP MAP (your range: 0–250 kPa) ----
-      var v = map;
-      if (v < 0) v = 0;
-      if (v > 250) v = 250;
-      // -------------------------------------------
-
 			let baroKpa = 100;
-			let boost = Math.max(0, (v - baroKpa) * 0.145038);
+			let boost = Math.max(0, (map - baroKpa) * 0.145038);
 
-      gauge.update({
-        value: v,            // needle
-        valueText: String(map) // real MAP reading
+      setGaugeReading(gauge, {
+        value: map,            // needle
+        valueText: String(map), // real MAP reading
+        colorBarProgress: colorForGaugeValue(gauge, map)
       });
 
-      gauge2.update({
-        value: boost.toFixed(1),            // needle
+      setGaugeReading(gauge2, {
+        value: Number(boost.toFixed(1)),     // needle
         valueText: String(boost.toFixed(1)) // real MAP reading
       });
 
@@ -77,4 +74,3 @@ export default {
     }
   }
 };
-

@@ -1,3 +1,5 @@
+import { colorForGaugeValue, setGaugeReading } from "./common/gaugeColor";
+
 export default {
 
   initialize: function () {
@@ -23,7 +25,7 @@ export default {
     var gauge = this.update.g;
 
     if (noComm) {
-      gauge.update({ value: 0, valueText: "0" });
+      setGaugeReading(gauge, { value: 0, valueText: "0" });
       return;
     }
 
@@ -33,14 +35,10 @@ export default {
       mat = Number(mat);
       if (!Number.isFinite(mat)) mat = 0;
 
-      // clamp MAT range (editable)
-      var clamped = mat;
-      if (clamped < 40) clamped = 40;
-      if (clamped > 200) clamped = 200;
-
-      gauge.update({
-        value: clamped,       // needle
-        valueText: String(mat) // real value text
+      setGaugeReading(gauge, {
+        value: mat,            // needle
+        valueText: String(mat), // real value text
+        colorBarProgress: colorForGaugeValue(gauge, mat)
       });
 
     } catch (error) {
@@ -48,4 +46,3 @@ export default {
     }
   }
 };
-

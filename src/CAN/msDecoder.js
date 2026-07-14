@@ -1,12 +1,13 @@
 import { DATA_MAP } from "../dataKeys.js";
-import { performance } from "perf_hooks";
 import { computeFuelGPH } from "../fuelFlow.js";
+import { vehicleTimeMs } from "./canTime.js";
 
 
 
 const lastValues = {};
 
-let lastVssTime = performance.now();
+let lastVssTime = null;
+let currentCanTime = null;
 
 import fs from "fs";
 const HISTORY_FILE = "./data/history.json";
@@ -133,6 +134,32 @@ const MS_CAN_MAP = {
   },
 
   // -------------------------------------------------------
+  // 0x5F5 : TPS acceleration enrichment
+  // -------------------------------------------------------
+  0x5F5: (data) => {
+    // This ECU firmware broadcasts the correction channels as whole percent.
+    // Dividing here made a raw 99 appear as 9.9% on the dashboard.
+    const aeAmount = readS16(data, 2);
+    return [{ id: DATA_MAP.AE_AMOUNT, data: aeAmount }];
+  },
+
+  // -------------------------------------------------------
+  // 0x5F6 : Idle stepper position / PWM idle raw value
+  // -------------------------------------------------------
+  0x5F6: (data) => {
+    const idlePosition = readU16(data, 6);
+    return [{ id: DATA_MAP.IDLE_POSITION, data: idlePosition }];
+  },
+
+  // -------------------------------------------------------
+  // 0x5F7 : TPS rate of change
+  // -------------------------------------------------------
+  0x5F7: (data) => {
+    const tpsDot = readS16(data, 2) / 10;
+    return [{ id: DATA_MAP.TPS_DOT, data: tpsDot }];
+  },
+
+  // -------------------------------------------------------
   // 0x5FA : STATUS1–8 bitfields
   // -------------------------------------------------------
   0x5FA: (data) => {
@@ -165,6 +192,14 @@ const MS_CAN_MAP = {
   },
 
   // -------------------------------------------------------
+  // 0x60D : EAE fuel correction channel 1
+  // -------------------------------------------------------
+  0x60D: (data) => {
+    const eae1 = readS16(data, 0);
+    return [{ id: DATA_MAP.EAE1, data: eae1 }];
+  },
+
+  // -------------------------------------------------------
   // 0x60F : AFR
   // -------------------------------------------------------
   0x60F: (data) => {
@@ -182,8 +217,8 @@ const MS_CAN_MAP = {
   const fuelPsi = lastValues[DATA_MAP.SENSOR2.id] || 0;
 
   // ---- time delta ----
-  const now = performance.now();
-  let dtSeconds = (now - lastVssTime) / 1000;
+  const now = currentCanTime;
+  let dtSeconds = lastVssTime === null ? 0 : (now - lastVssTime) / 1000;
   lastVssTime = now;
 
   if (!Number.isFinite(dtSeconds) || dtSeconds <= 0 || dtSeconds > 1) {
@@ -233,6 +268,7 @@ const MS_CAN_MAP = {
   const historySaveNow = Date.now();
   if (
     process.env.TYPE !== "development" &&
+    process.env.STARTUP_MODE !== "replay_logs" &&
     !historySaveInFlight &&
     historySaveNow - lastHistorySaveTime >= HISTORY_SAVE_MS
   ) {
@@ -252,6 +288,9 @@ const MS_CAN_MAP = {
     { id: DATA_MAP.CURRENT_MPG,    data: currentMPG },
     { id: DATA_MAP.AVERAGE_MPG,    data: averageMPG },
     { id: DATA_MAP.HISTORICAL_MPG, data: histMPG },
+    ...(process.env.STARTUP_MODE === "replay_logs"
+      ? [{ id: DATA_MAP.FUEL_GALLONS_USED, data: tripGallons }]
+      : []),
   ];
 },
 
@@ -266,6 +305,7 @@ const MS_CAN_MAP = {
 // -------------------------------------------------------
 const msDecoder = {
   do: (canMsg) => {
+    currentCanTime = vehicleTimeMs(canMsg);
     const decodedId = canMsg.id & 0x7FF; // force 11-bit CAN ID
 
     const handler = MS_CAN_MAP[decodedId];

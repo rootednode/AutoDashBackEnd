@@ -88,6 +88,17 @@ export function initCan() {
   };
 }
 
+export function initVirtualCan() {
+  console.warn("[CAN] replay mode — using vcan0");
+  try {
+    run("sudo modprobe can");
+    run("sudo modprobe can_raw");
+    run("sudo modprobe vcan");
+  } catch {}
+  if (!ifaceExists("vcan0")) run("sudo ip link add dev vcan0 type vcan");
+  run("sudo ip link set up vcan0");
+  return { iface: "vcan0", simulated: true, reason: "log_replay" };
+}
 
 
 
