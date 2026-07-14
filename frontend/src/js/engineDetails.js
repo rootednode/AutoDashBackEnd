@@ -301,7 +301,7 @@ function drawAeBins(tpsDot = null) {
 }
 
 function reset() {
-  setText("idledisplay", "IDLE --");
+  setText("idledisplay", "--");
   setText("aedisplay", "AE --");
   setText("eaedisplay", "EAE1 --");
   aeHistory = [];
@@ -396,7 +396,7 @@ export default {
       return;
     }
 
-    setText("idledisplay", `IDLE ${Math.round(idle)}`);
+    setText("idledisplay", `${Math.round(idle)}`);
     setText("aedisplay", `AE ${ae.toFixed(1)}%`);
     setText("eaedisplay", `EAE1 ${eaeCorrection.toFixed(1)}%`);
     drawAeHistogram();

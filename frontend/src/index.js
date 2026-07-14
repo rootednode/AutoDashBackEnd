@@ -19,6 +19,7 @@ import sensors from "./js/sensors";
 import fuel from "./js/fuel";
 import canIndicator from "./js/canIndicator";
 import engineDetails from "./js/engineDetails";
+import { setEfficiencyWallpaperTint } from "./js/common/gaugeColor";
 
 // --------------------------------------------------
 // WORKER
@@ -49,6 +50,8 @@ let lastPacketTime = Date.now();
 const AUTO_REFRESH_TIMEOUT = 1000;
 const WATCHDOG_INTERVAL = 250;
 const DRIVE_SUMMARY_CAN_SILENCE = 2000;
+const BOOST_THRESHOLD_KPA = 100;
+const KPA_TO_PSI = 0.145038;
 let summaryVisible = false;
 let driveSession = null;
 let latestVehicleTime = null;
@@ -72,14 +75,24 @@ function beginDriveSession(now) {
     endOdometer: numberValue(DATA_MAP.CURRENT_ODOMETER),
     maxRpm: 0,
     maxMap: 0,
+    maxBoostPsi: 0,
+    boostMilliseconds: 0,
     maxTpsDot: 0,
     maxClt: 0,
+    cltTotal: 0,
+    cltSamples: 0,
     maxSpeed: 0,
     minMat: Infinity,
     maxMat: -Infinity,
+    matTotal: 0,
+    matSamples: 0,
     minOilTemp: Infinity,
     maxOilTemp: -Infinity,
+    oilTempTotal: 0,
+    oilTempSamples: 0,
     minVoltage: Infinity,
+    voltageTotal: 0,
+    voltageSamples: 0,
     afrTotal: 0,
     afrSamples: 0,
     ecoTotal: 0,
@@ -98,8 +111,9 @@ function recordDriveSample() {
   if (!driveSession) return;
   const wallNow = Date.now();
   const vehicleDelta = now - driveSession.lastSampleAt;
+  const continuousSample = wallNow - driveSession.lastWallSampleAt <= 500;
   if (
-    wallNow - driveSession.lastWallSampleAt <= 500 &&
+    continuousSample &&
     vehicleDelta > 0 &&
     rpm > 0 &&
     numberValue(DATA_MAP.SPEEDO) < 1
@@ -112,12 +126,28 @@ function recordDriveSample() {
   driveSession.endFuel = numberValue(DATA_MAP.FUEL_GALLONS_USED);
   driveSession.endOdometer = numberValue(DATA_MAP.CURRENT_ODOMETER);
   driveSession.maxRpm = Math.max(driveSession.maxRpm, rpm);
-  driveSession.maxMap = Math.max(driveSession.maxMap, numberValue(DATA_MAP.MAP));
+  const mapKpa = numberValue(DATA_MAP.MAP);
+  driveSession.maxMap = Math.max(driveSession.maxMap, mapKpa);
+  const boostPsi = Math.max(0, (mapKpa - BOOST_THRESHOLD_KPA) * KPA_TO_PSI);
+  driveSession.maxBoostPsi = Math.max(driveSession.maxBoostPsi, boostPsi);
+  if (
+    continuousSample &&
+    vehicleDelta > 0 &&
+    rpm > 0 &&
+    mapKpa > BOOST_THRESHOLD_KPA
+  ) {
+    driveSession.boostMilliseconds += vehicleDelta;
+  }
   driveSession.maxTpsDot = Math.max(
     driveSession.maxTpsDot,
     numberValue(DATA_MAP.TPS_DOT)
   );
-  driveSession.maxClt = Math.max(driveSession.maxClt, numberValue(DATA_MAP.CTS));
+  const clt = numberValue(DATA_MAP.CTS);
+  driveSession.maxClt = Math.max(driveSession.maxClt, clt);
+  if (clt !== 0) {
+    driveSession.cltTotal += clt;
+    driveSession.cltSamples += 1;
+  }
   driveSession.maxSpeed = Math.max(
     driveSession.maxSpeed,
     numberValue(DATA_MAP.SPEEDO)
@@ -126,14 +156,22 @@ function recordDriveSample() {
   if (mat !== 0) {
     driveSession.minMat = Math.min(driveSession.minMat, mat);
     driveSession.maxMat = Math.max(driveSession.maxMat, mat);
+    driveSession.matTotal += mat;
+    driveSession.matSamples += 1;
   }
   const oilTemp = numberValue(DATA_MAP.SENSOR3);
   if (oilTemp !== 0) {
     driveSession.minOilTemp = Math.min(driveSession.minOilTemp, oilTemp);
     driveSession.maxOilTemp = Math.max(driveSession.maxOilTemp, oilTemp);
+    driveSession.oilTempTotal += oilTemp;
+    driveSession.oilTempSamples += 1;
   }
   const voltage = numberValue(DATA_MAP.VOLT);
-  if (voltage > 0) driveSession.minVoltage = Math.min(driveSession.minVoltage, voltage);
+  if (voltage > 0) {
+    driveSession.minVoltage = Math.min(driveSession.minVoltage, voltage);
+    driveSession.voltageTotal += voltage;
+    driveSession.voltageSamples += 1;
+  }
   driveSession.reportedAverageMpg = numberValue(DATA_MAP.AVERAGE_MPG);
   const rawAfr = numberValue(DATA_MAP.AFR);
   const currentAfr = rawAfr / 10;
@@ -189,6 +227,18 @@ function showDriveSummary() {
   const averageEco = driveSession.ecoSamples > 0
     ? driveSession.ecoTotal / driveSession.ecoSamples
     : null;
+  const averageClt = driveSession.cltSamples > 0
+    ? driveSession.cltTotal / driveSession.cltSamples
+    : null;
+  const averageMat = driveSession.matSamples > 0
+    ? driveSession.matTotal / driveSession.matSamples
+    : null;
+  const averageOilTemp = driveSession.oilTempSamples > 0
+    ? driveSession.oilTempTotal / driveSession.oilTempSamples
+    : null;
+  const averageVoltage = driveSession.voltageSamples > 0
+    ? driveSession.voltageTotal / driveSession.voltageSamples
+    : null;
   const efficientPercent = driveSession.ecoSamples > 0
     ? driveSession.ecoEfficientSamples / driveSession.ecoSamples * 100
     : null;
@@ -202,8 +252,20 @@ function showDriveSummary() {
   );
   setSummaryText("drive-summary-rpm", Math.round(driveSession.maxRpm));
   setSummaryText("drive-summary-map", `${driveSession.maxMap.toFixed(1)} kPa`);
+  setSummaryText(
+    "drive-summary-boost-max",
+    `${driveSession.maxBoostPsi.toFixed(1)} psi`
+  );
+  setSummaryText(
+    "drive-summary-boost-time",
+    formatIdleDuration(driveSession.boostMilliseconds)
+  );
   setSummaryText("drive-summary-tpsdot", `${driveSession.maxTpsDot.toFixed(1)} %/s`);
   setSummaryText("drive-summary-clt", `${Math.round(driveSession.maxClt)}°`);
+  setSummaryText(
+    "drive-summary-clt-average",
+    averageClt === null ? "--" : `${Math.round(averageClt)}°`
+  );
   setSummaryText("drive-summary-speed", `${driveSession.maxSpeed.toFixed(1)} mph`);
   setSummaryText("drive-summary-distance", `${distance.toFixed(1)} mi`);
   setSummaryText("drive-summary-fuel", `${fuelUsed.toFixed(2)} gal`);
@@ -222,6 +284,10 @@ function showDriveSummary() {
       : "--"
   );
   setSummaryText(
+    "drive-summary-mat-average",
+    averageMat === null ? "--" : `${Math.round(averageMat)}°`
+  );
+  setSummaryText(
     "drive-summary-oil-temp",
     Number.isFinite(driveSession.minOilTemp) &&
       Number.isFinite(driveSession.maxOilTemp)
@@ -229,10 +295,18 @@ function showDriveSummary() {
       : "--"
   );
   setSummaryText(
+    "drive-summary-oil-temp-average",
+    averageOilTemp === null ? "--" : `${Math.round(averageOilTemp)}°`
+  );
+  setSummaryText(
     "drive-summary-voltage",
     Number.isFinite(driveSession.minVoltage)
       ? `${driveSession.minVoltage.toFixed(1)} V`
       : "--"
+  );
+  setSummaryText(
+    "drive-summary-voltage-average",
+    averageVoltage === null ? "--" : `${averageVoltage.toFixed(1)} V`
   );
   setSummaryText(
     "drive-summary-eco-average",
@@ -411,6 +485,14 @@ const renderDashboard = () => {
       try { tps.update(updateData[DATA_MAP.TPS.id], isCommError); } catch {}
       try { mat.update(updateData[DATA_MAP.MAT.id], isCommError); } catch {}
       try { eco.update(updateData[DATA_MAP.ECO.id], isCommError); } catch {}
+      try {
+        setEfficiencyWallpaperTint({
+          eco: updateData[DATA_MAP.ECO.id],
+          speed: updateData[DATA_MAP.SPEEDO.id],
+          rpm: updateData[DATA_MAP.RPM.id],
+          noComm: isCommError
+        });
+      } catch {}
       try { volt.update(updateData[DATA_MAP.VOLT.id], isCommError); } catch {}
       try { adv.update(updateData[DATA_MAP.ADV.id], isCommError); } catch {}
 

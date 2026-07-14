@@ -4,6 +4,10 @@ const PEAK_WINDOW_MS = 10_000;
 const peakByGauge = new WeakMap();
 const peakSamplesByGauge = new WeakMap();
 const peakListenerGauges = new WeakSet();
+const EFFICIENT_WALLPAPER_TINT = "rgba(0, 130, 0, 0.42)";
+const INEFFICIENT_WALLPAPER_TINT = "rgba(155, 0, 0, 0.42)";
+const EFFICIENT_ECO_SCORE = 70;
+const MIN_DRIVING_SPEED_MPH = 5;
 
 function normalizedGaugeValue(gauge, value) {
   const minValue = Number(gauge.options.minValue);
@@ -265,4 +269,24 @@ export function setGaugeReading(
   }
 
   if (needsDraw) gauge.draw();
+}
+
+export function setEfficiencyWallpaperTint({ eco, speed, rpm, noComm }) {
+  const ecoScore = Number(eco);
+  const vehicleSpeed = Number(speed);
+  const engineRpm = Number(rpm);
+  const driving =
+    !noComm &&
+    Number.isFinite(ecoScore) &&
+    Number.isFinite(vehicleSpeed) &&
+    Number.isFinite(engineRpm) &&
+    vehicleSpeed >= MIN_DRIVING_SPEED_MPH &&
+    engineRpm > 0;
+  const tint = !driving
+    ? "rgba(0, 0, 0, 0)"
+    : ecoScore >= EFFICIENT_ECO_SCORE
+      ? EFFICIENT_WALLPAPER_TINT
+      : INEFFICIENT_WALLPAPER_TINT;
+
+  document.body.style.setProperty("--efficiency-wallpaper-tint", tint);
 }
