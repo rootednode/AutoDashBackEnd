@@ -1,13 +1,10 @@
 const DEFAULT_GAUGE_COLOR = "rgba(0, 250, 0, .75)";
-const PEAK_NEEDLE_COLOR = "#00ffff";
+const PEAK_NEEDLE_COLOR = "rgba(0, 255, 255, .6)";
 const PEAK_WINDOW_MS = 10_000;
 const peakByGauge = new WeakMap();
 const peakSamplesByGauge = new WeakMap();
 const peakListenerGauges = new WeakSet();
-const EFFICIENT_WALLPAPER_TINT = "rgba(0, 130, 0, 0.42)";
-const INEFFICIENT_WALLPAPER_TINT = "rgba(155, 0, 0, 0.42)";
-const EFFICIENT_ECO_SCORE = 70;
-const MIN_DRIVING_SPEED_MPH = 5;
+const dimmedHighlightGauges = new WeakSet();
 
 function normalizedGaugeValue(gauge, value) {
   const minValue = Number(gauge.options.minValue);
@@ -42,20 +39,19 @@ function drawLinearPeakNeedle(gauge, peakValue) {
   context.save();
   context.beginPath();
   context.strokeStyle = PEAK_NEEDLE_COLOR;
-  context.lineWidth = Math.max(2, dimensions.pixelRatio || 1);
-  context.shadowColor = "rgba(0, 255, 255, .8)";
-  context.shadowBlur = 4;
+  context.lineWidth = Math.max(1, dimensions.pixelRatio || 1);
+  context.shadowBlur = 0;
 
   if (isVertical) {
     const y = Y + length - barMargin - offset - position;
     const x = X + (width - barWidth) / 2;
-    context.moveTo(x - 4, y);
-    context.lineTo(x + barWidth + 4, y);
+    context.moveTo(x, y);
+    context.lineTo(x + barWidth, y);
   } else {
     const x = X + barMargin + offset + position;
     const y = Y + (width - barWidth) / 2;
-    context.moveTo(x, y - 4);
-    context.lineTo(x, y + barWidth + 4);
+    context.moveTo(x, y);
+    context.lineTo(x, y + barWidth);
   }
 
   context.stroke();
@@ -77,12 +73,36 @@ function drawRadialPeakNeedle(gauge, peakValue) {
   context.save();
   context.rotate(angle);
   context.beginPath();
-  context.moveTo(0, radius * 0.18);
-  context.lineTo(0, radius * 0.82);
+  context.moveTo(0, radius * 0.68);
+  context.lineTo(0, radius * 0.86);
   context.strokeStyle = PEAK_NEEDLE_COLOR;
+  context.lineWidth = Math.max(1, gauge.canvas.constructor.pixelRatio || 1);
+  context.shadowBlur = 0;
+  context.stroke();
+  context.closePath();
+  context.restore();
+}
+
+function drawRadialCurrentMarker(gauge) {
+  const context = gauge.canvas?.context;
+  const value = Number(gauge.options.value);
+  const ratio = normalizedGaugeValue(gauge, value);
+  if (!context || context.barDimensions || ratio === null) return;
+
+  const startAngle = Number(gauge.options.startAngle) || 0;
+  const ticksAngle = Number(gauge.options.ticksAngle) || 0;
+  const angle = ((startAngle + ratio * ticksAngle) * Math.PI) / 180;
+  const radius = context.max;
+  if (!Number.isFinite(radius)) return;
+
+  context.save();
+  context.rotate(angle);
+  context.beginPath();
+  context.moveTo(0, radius * 0.68);
+  context.lineTo(0, radius * 0.86);
+  context.strokeStyle = "#ffffff";
   context.lineWidth = Math.max(2, gauge.canvas.constructor.pixelRatio || 1);
-  context.shadowColor = "rgba(0, 255, 255, .8)";
-  context.shadowBlur = 4;
+  context.shadowBlur = 0;
   context.stroke();
   context.closePath();
   context.restore();
@@ -105,6 +125,7 @@ function ensurePeakNeedleListener(gauge) {
 
   gauge.on("beforeNeedle", function drawRecordedPeak() {
     drawPeakNeedle(this);
+    drawRadialCurrentMarker(this);
   });
   peakListenerGauges.add(gauge);
 }
@@ -160,6 +181,29 @@ function parseRgba(color) {
   };
 }
 
+function colorWithAlpha(color, alpha) {
+  const parsed = parseRgba(color);
+  if (!parsed) return color;
+  return `rgba(${parsed.red}, ${parsed.green}, ${parsed.blue}, ${alpha})`;
+}
+
+function emphasizeColor(color) {
+  return colorWithAlpha(color, 0.85);
+}
+
+function dimStaticHighlights(gauge) {
+  if (dimmedHighlightGauges.has(gauge)) return false;
+  dimmedHighlightGauges.add(gauge);
+
+  const ranges = configuredHighlightRanges(gauge);
+  if (ranges.length === 0) return false;
+  gauge.options.highlights = ranges.map((range) => ({
+    ...range,
+    color: colorWithAlpha(range.color, 0.28)
+  }));
+  return true;
+}
+
 function blendColors(fromColor, toColor, ratio) {
   const from = parseRgba(fromColor);
   const to = parseRgba(toColor);
@@ -189,9 +233,11 @@ export function colorForGaugeValue(gauge, value) {
         (index === ranges.length - 1 && numericValue <= Number(range.to)))
   );
 
-  if (matchingRange) return matchingRange.color;
-  if (numericValue < Number(ranges[0].from)) return ranges[0].color;
-  return ranges[ranges.length - 1].color;
+  if (matchingRange) return emphasizeColor(matchingRange.color);
+  if (numericValue < Number(ranges[0].from)) {
+    return emphasizeColor(ranges[0].color);
+  }
+  return emphasizeColor(ranges[ranges.length - 1].color);
 }
 
 export function blendedColorForGaugeValue(gauge, value, maxBlendWidth = 300) {
@@ -213,7 +259,9 @@ export function blendedColorForGaugeValue(gauge, value, maxBlendWidth = 300) {
 
     if (numericValue >= blendStart && numericValue < boundary) {
       const ratio = (numericValue - blendStart) / blendWidth;
-      return blendColors(currentRange.color, nextRange.color, ratio);
+      return emphasizeColor(
+        blendColors(currentRange.color, nextRange.color, ratio)
+      );
     }
   }
 
@@ -227,6 +275,8 @@ export function setGaugeReading(
   if (!gauge) return;
 
   let needsDraw = false;
+
+  if (dimStaticHighlights(gauge)) needsDraw = true;
 
   if (
     valueText !== undefined &&
@@ -269,24 +319,4 @@ export function setGaugeReading(
   }
 
   if (needsDraw) gauge.draw();
-}
-
-export function setEfficiencyWallpaperTint({ eco, speed, rpm, noComm }) {
-  const ecoScore = Number(eco);
-  const vehicleSpeed = Number(speed);
-  const engineRpm = Number(rpm);
-  const driving =
-    !noComm &&
-    Number.isFinite(ecoScore) &&
-    Number.isFinite(vehicleSpeed) &&
-    Number.isFinite(engineRpm) &&
-    vehicleSpeed >= MIN_DRIVING_SPEED_MPH &&
-    engineRpm > 0;
-  const tint = !driving
-    ? "rgba(0, 0, 0, 0)"
-    : ecoScore >= EFFICIENT_ECO_SCORE
-      ? EFFICIENT_WALLPAPER_TINT
-      : INEFFICIENT_WALLPAPER_TINT;
-
-  document.body.style.setProperty("--efficiency-wallpaper-tint", tint);
 }

@@ -8,7 +8,7 @@ export default {
   if (this.update.g) {
     this.update.g.update({
       value: 0,
-			valueText: "null"
+			valueText: "—"
     });
   }
   },
@@ -24,7 +24,7 @@ export default {
     var gauge = this.update.g;
 
     if (noComm) {
-      setGaugeReading(gauge, { value: 0, valueText: "null" });
+      setGaugeReading(gauge, { value: 0, valueText: "—" });
       return;
     }
 

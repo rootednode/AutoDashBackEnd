@@ -91,6 +91,10 @@ export const DATA_MAP = {
   TPS_DOT: { id: keygen(), byteType: TYPES.FLOAT },
   EAE1: { id: keygen(), byteType: TYPES.FLOAT },
 
+  // MegaSquirt CAN realtime broadcast group 17
+  BOOST_TARGET: { id: keygen(), byteType: TYPES.FLOAT }, // absolute kPa
+  BOOST_CONTROLLER_DUTY: { id: keygen(), byteType: TYPES.UINT8 }, // 0-100%
+
 }; // END DATA_MAP
 
 

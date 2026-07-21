@@ -86,6 +86,10 @@ export const DATA_MAP = {
   AE_AMOUNT: { id: keygen(), byteType: TYPES.FLOAT }, // TPS acceleration enrichment, %
   TPS_DOT: { id: keygen(), byteType: TYPES.FLOAT }, // throttle position rate, %/s
   EAE1: { id: keygen(), byteType: TYPES.FLOAT }, // EAE fuel correction channel 1, %
+
+  // MegaSquirt CAN realtime broadcast group 17 (base ID 0x5F0 + 17 = 0x601)
+  BOOST_TARGET: { id: keygen(), byteType: TYPES.FLOAT }, // absolute kPa
+  BOOST_CONTROLLER_DUTY: { id: keygen(), byteType: TYPES.UINT8 }, // 0-100%
 };
 Object.freeze(DATA_MAP);
 

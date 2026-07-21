@@ -1,4 +1,5 @@
 import { colorForGaugeValue, setGaugeReading } from "./common/gaugeColor";
+import { TANK_CAPACITY_GALLONS } from "./common/vehicleConfig";
 
 export default {
   initialize: function () {
@@ -7,13 +8,15 @@ export default {
 
     // Startup default only
     if (this.update.elGal)
-      this.update.elGal.textContent = '0.0 / 0.0';
+      this.update.elGal.textContent = "0.0 / 0.0 / 0.0";
   },
 
   update: function (
     fuel,
     gallons,
     gallonssincelastrefill,
+    averageMpg,
+    historicalMpg,
     senderConnected,
     noComm
   ) {
@@ -33,7 +36,24 @@ export default {
     if (elGal) {
       const g1 = Number.isFinite(gallons) ? gallons : 0;
       const g2 = Number.isFinite(gallonssincelastrefill) ? gallonssincelastrefill : 0;
-      elGal.textContent = `${g1.toFixed(3)} / ${g2.toFixed(3)}`;
+      const fuelPercent = Number(fuel);
+      const senderIsValid = Number(senderConnected) === 1;
+      const tankGallonsUsed = senderIsValid || g2 > 0 ? g2 : g1;
+      const remainingGallons = senderIsValid && Number.isFinite(fuelPercent) && fuelPercent >= 0
+        ? Math.max(0, Math.min(TANK_CAPACITY_GALLONS, fuelPercent / 100 * TANK_CAPACITY_GALLONS))
+        : Math.max(0, TANK_CAPACITY_GALLONS - tankGallonsUsed);
+      const tripMpg = Number(averageMpg);
+      const lifetimeMpg = Number(historicalMpg);
+      const rangeMpg = Number.isFinite(tripMpg) && tripMpg > 0
+        ? tripMpg
+        : Number.isFinite(lifetimeMpg) && lifetimeMpg > 0
+          ? lifetimeMpg
+          : 0;
+      const estimatedRange = remainingGallons * rangeMpg;
+      elGal.textContent = `${g1.toFixed(1)} / ${tankGallonsUsed.toFixed(1)} / ${remainingGallons.toFixed(1)}`;
+      elGal.dataset.range = rangeMpg > 0
+        ? `RANGE ${Math.round(estimatedRange)} MI`
+        : "RANGE --";
     }
 
     // ----- Fuel gauge -----
@@ -45,7 +65,7 @@ export default {
 
     try {
       if (!fuelValid) {
-        setGaugeReading(gauge, { valueText: "null" });
+        setGaugeReading(gauge, { valueText: "—" });
         return;
       }
 
@@ -61,5 +81,3 @@ export default {
     }
   }
 };
-
-

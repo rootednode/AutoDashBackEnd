@@ -8,7 +8,7 @@ export default {
   if (this.update.g) {
     this.update.g.update({
       value: 100,
-			valueText: "null"
+			valueText: "—"
     });
   }
 
@@ -26,7 +26,7 @@ export default {
     var gauge = this.update.g;
 
     if (noComm) {
-      setGaugeReading(gauge, { value: 0, valueText: "0" });
+      setGaugeReading(gauge, { value: 100, valueText: "—" });
       return;
     }
 
@@ -36,7 +36,7 @@ export default {
 
     setGaugeReading(gauge, {
       value: clt,
-      valueText: String(clt),
+      valueText: String(Math.round(clt)),
       colorBarProgress: colorForGaugeValue(gauge, clt)
     });
   }

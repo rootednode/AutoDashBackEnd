@@ -180,7 +180,9 @@ const MS_CAN_MAP = {
   0x5FD: (data) => {
     const decodeSensor = (offset) => {
       const raw = readS16(data, offset);
-      return (raw > 0 && raw < 10000) ? Math.floor(raw / 10) : 0;
+      // Preserve a failed/disconnected sender as invalid. Converting it to
+      // zero makes the dashboard present a believable but unsafe reading.
+      return (raw > 0 && raw < 10000) ? Math.floor(raw / 10) : Number.NaN;
     };
 
     return [
@@ -206,6 +208,20 @@ const MS_CAN_MAP = {
     const raw = data.readUInt8(0);
     const afr = (raw > 0 && raw < 255) ? raw : 0;
     return [{ id: DATA_MAP.AFR, data: afr }];
+  },
+
+  // -------------------------------------------------------
+  // 0x601 : Boost target 1, boost target 2, boost duties
+  // MegaSquirt broadcast group 17. The dashboard uses channel 1.
+  // -------------------------------------------------------
+  0x601: (data) => {
+    const boostTarget = readU16(data, 0) / 10;
+    const boostControllerDuty = data.readUInt8(4);
+
+    return [
+      { id: DATA_MAP.BOOST_TARGET, data: boostTarget },
+      { id: DATA_MAP.BOOST_CONTROLLER_DUTY, data: boostControllerDuty },
+    ];
   },
 
 

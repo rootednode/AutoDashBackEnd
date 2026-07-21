@@ -15,6 +15,20 @@ const LOG_EVERY_N_UPDATES = 1;
 let updateCounter = 0;
 let lastDebugSignature = "";
 const missingIndicatorsLogged = new Set();
+const WARNING_MEMORY_MS = 5_000;
+const OIL_WARNING_DEBOUNCE_MS = 750;
+const FUEL_WARNING_DEBOUNCE_MS = 750;
+const AFR_WARNING_DEBOUNCE_MS = 500;
+const ENGINE_RUNNING_RPM = 500;
+const MIN_FUEL_DIFFERENTIAL_PSI = 35;
+const KPA_TO_PSI = 0.145038;
+let warningLatchedUntil = 0;
+let lowOilSince = null;
+let lowFuelPressureSince = null;
+let leanSince = null;
+let rememberedWarningLabel = "WARN";
+let activeEventCodes = new Set();
+let warningHistory = [];
 
 // -------------------------------------------------------------
 // INDICATOR HELPERS
@@ -49,10 +63,109 @@ function setIndicator(id, on) {
   }
 
   el.style.opacity = on ? "1" : ".3";
+  el.classList.toggle("indicator-active", on && el.classList.contains("icon-warn"));
 
   if (DEBUG_STATUS) {
     console.log(`[status.js] indicator ${id}: ${on ? "ON" : "off"}`);
   }
+}
+
+function setOilPressureWarning(on) {
+  const container = document.getElementById("oilpsi_container");
+  if (container) container.classList.toggle("oil-pressure-warning", on);
+}
+
+function setWarningLabel(label) {
+  const element = document.getElementById("warning-label");
+  if (element) element.textContent = label || "WARN";
+}
+
+function requiredOilPressure(rpm) {
+  if (!Number.isFinite(rpm) || rpm < ENGINE_RUNNING_RPM) return 0;
+  return Math.max(10, Math.min(55, rpm / 100));
+}
+
+function oilPressureWarning(rpm, oilPressure, now) {
+  const required = requiredOilPressure(rpm);
+  if (required === 0 || !Number.isFinite(oilPressure)) {
+    lowOilSince = null;
+    return false;
+  }
+
+  if (oilPressure >= required) {
+    lowOilSince = null;
+    return false;
+  }
+
+  if (lowOilSince === null) lowOilSince = now;
+  return now - lowOilSince >= OIL_WARNING_DEBOUNCE_MS;
+}
+
+function fuelPressureWarning(rpm, mapKpa, fuelPressure, now) {
+  if (
+    !Number.isFinite(rpm) || rpm < 1_000 ||
+    !Number.isFinite(mapKpa) || !Number.isFinite(fuelPressure)
+  ) {
+    lowFuelPressureSince = null;
+    return { active: false, differential: null };
+  }
+
+  const manifoldGaugePsi = (mapKpa - 101.325) * KPA_TO_PSI;
+  const differential = fuelPressure - manifoldGaugePsi;
+  if (differential >= MIN_FUEL_DIFFERENTIAL_PSI) {
+    lowFuelPressureSince = null;
+    return { active: false, differential };
+  }
+
+  if (lowFuelPressureSince === null) lowFuelPressureSince = now;
+  return {
+    active: now - lowFuelPressureSince >= FUEL_WARNING_DEBOUNCE_MS,
+    differential
+  };
+}
+
+function leanUnderLoadWarning(rpm, mapKpa, tps, afr, now) {
+  const boosted = mapKpa >= 105;
+  const highLoad = mapKpa >= 80 && tps >= 60;
+  const loaded = rpm >= 1_500 && (boosted || highLoad);
+  const leanLimit = boosted ? 13.2 : 14.0;
+
+  if (!loaded || !Number.isFinite(afr) || afr <= leanLimit) {
+    leanSince = null;
+    return { active: false, limit: leanLimit };
+  }
+
+  if (leanSince === null) leanSince = now;
+  return {
+    active: now - leanSince >= AFR_WARNING_DEBOUNCE_MS,
+    limit: leanLimit
+  };
+}
+
+function ecuWarningDetail(flags) {
+  if (flags.limp) return { code: "ecu-limp", label: "LIMP", detail: "ECU LIMP" };
+  if (flags.knock) return { code: "ecu-knock", label: "KNOCK", detail: "KNOCK" };
+  if (flags.overboost) return { code: "ecu-boost", label: "BOOST", detail: "OVERBOOST" };
+  if (flags.afrSd || flags.afrWarn) return { code: "ecu-afr", label: "AFR", detail: "ECU AFR" };
+  if (flags.egtSd || flags.egtWarn) return { code: "ecu-egt", label: "EGT", detail: "ECU EGT" };
+  if (flags.sparkCut) return { code: "spark-cut", label: "SPARK", detail: "SPARK CUT" };
+  if (flags.cel) return { code: "ecu-cel", label: "CEL", detail: "CHECK ENGINE" };
+  return null;
+}
+
+function recordNewWarnings(warnings, rpm, speed, timestamp) {
+  const currentCodes = new Set(warnings.map((warning) => warning.code));
+  warnings.forEach((warning) => {
+    if (activeEventCodes.has(warning.code)) return;
+    warningHistory.push({
+      ...warning,
+      rpm: Number.isFinite(rpm) ? rpm : 0,
+      speed: Number.isFinite(speed) ? speed : 0,
+      timestamp: Number.isFinite(timestamp) ? timestamp : Date.now()
+    });
+    if (warningHistory.length > 50) warningHistory.shift();
+  });
+  activeEventCodes = currentCodes;
 }
 
 function resetIndicators(reason = "reset") {
@@ -67,6 +180,8 @@ function resetIndicators(reason = "reset") {
   setIndicator("engine_run", false);
   setIndicator("idle", false);
   setIndicator("overheat", false);
+  setOilPressureWarning(false);
+  setWarningLabel("WARN");
 }
 
 function debugElementCheck() {
@@ -164,7 +279,22 @@ export default {
     }
 
     debugElementCheck();
+    warningLatchedUntil = 0;
+    lowOilSince = null;
+    lowFuelPressureSince = null;
+    leanSince = null;
+    rememberedWarningLabel = "WARN";
+    activeEventCodes = new Set();
     resetIndicators("initialize");
+  },
+
+  startSession: function () {
+    warningHistory = [];
+    activeEventCodes = new Set();
+  },
+
+  getSessionSummary: function () {
+    return warningHistory.map((event) => ({ ...event }));
   },
 
   // Expected order:
@@ -174,7 +304,11 @@ export default {
   // Also supports old order:
   // engine, status1, status2, status3, status4,
   // status5, status6, status7, noComm
-  update: function (engine, s1, s2, s3, s4, s5, s6, s7, s8, noComm) {
+  update: function (
+    engine, s1, s2, s3, s4, s5, s6, s7, s8, noComm,
+    rpmValue, fuelPressureValue, oilTemperatureValue, oilPressureValue,
+    mapValue, tpsValue, afrRawValue, speedValue, timestampValue
+  ) {
     const raw = {
       engine,
       s1,
@@ -270,6 +404,62 @@ export default {
       flags.afrSd ||
       flags.egtSd;
 
+    const rpm = Number(rpmValue);
+    const fuelPressure = Number(fuelPressureValue);
+    const oilTemperature = Number(oilTemperatureValue);
+    const oilPressure = Number(oilPressureValue);
+    const mapKpa = Number(mapValue);
+    const tps = Number(tpsValue);
+    const afr = Number(afrRawValue) / 10;
+    const speed = Number(speedValue);
+    const timestamp = Number(timestampValue);
+    const now = performance.now();
+    const oilWarning = oilPressureWarning(rpm, oilPressure, now);
+    const fuelWarning = fuelPressureWarning(rpm, mapKpa, fuelPressure, now);
+    const leanWarning = leanUnderLoadWarning(rpm, mapKpa, tps, afr, now);
+    const warnings = [];
+    if (oilWarning) {
+      warnings.push({
+        code: "low-oil-pressure",
+        label: "LOW OIL",
+        detail: `${oilPressure.toFixed(0)} PSI`
+      });
+    }
+    if (fuelWarning.active) {
+      warnings.push({
+        code: "low-fuel-pressure",
+        label: "FUEL PSI",
+        detail: `${fuelWarning.differential.toFixed(0)} PSI Δ`
+      });
+    }
+    if (leanWarning.active) {
+      warnings.push({
+        code: "lean-under-load",
+        label: "LEAN",
+        detail: `${afr.toFixed(1)} AFR`
+      });
+    }
+    if (!Number.isFinite(fuelPressure)) {
+      warnings.push({ code: "fuel-sensor", label: "SENSOR", detail: "FUEL PSI" });
+    }
+    if (!Number.isFinite(oilTemperature)) {
+      warnings.push({ code: "oil-temp-sensor", label: "SENSOR", detail: "OIL TEMP" });
+    }
+    if (!Number.isFinite(oilPressure)) {
+      warnings.push({ code: "oil-psi-sensor", label: "SENSOR", detail: "OIL PSI" });
+    }
+    const ecuDetail = warning ? ecuWarningDetail(flags) : null;
+    if (ecuDetail) warnings.push(ecuDetail);
+    recordNewWarnings(warnings, rpm, speed, timestamp);
+
+    const activeWarning = warnings.length > 0;
+
+    if (activeWarning) {
+      warningLatchedUntil = now + WARNING_MEMORY_MS;
+      rememberedWarningLabel = warnings[0].label;
+    }
+    const rememberedWarning = activeWarning || now < warningLatchedUntil;
+
     const indicatorState = {
       engine_run: flags.ready,
       ase: flags.ase,
@@ -277,7 +467,7 @@ export default {
       idle: flags.clIdle,
       overheat: flags.egtSd || flags.afrSd,
       ac: flags.ac,
-      warning,
+      warning: rememberedWarning,
     };
 
     const signature = JSON.stringify({
@@ -306,5 +496,7 @@ export default {
     setIndicator("overheat", indicatorState.overheat);
     setIndicator("ac", indicatorState.ac);
     setIndicator("warning", indicatorState.warning);
+    setWarningLabel(rememberedWarning ? rememberedWarningLabel : "WARN");
+    setOilPressureWarning(oilWarning);
   },
 };

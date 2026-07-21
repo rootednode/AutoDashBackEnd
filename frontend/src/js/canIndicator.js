@@ -18,6 +18,6 @@ export default {
 
     // noComm === true → show CAN warning
     this.img.style.opacity = noComm ? "1" : ".3";
+    this.img.classList.toggle("indicator-active", Boolean(noComm));
   }
 };
-

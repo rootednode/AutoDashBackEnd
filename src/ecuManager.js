@@ -1,11 +1,12 @@
 import { performance } from "perf_hooks";
 import msDecoder from "./CAN/msDecoder.js";
-import fuelLevelUpdater from "./fuelLevelReader.js";
+import fuelLevelUpdater, { seedPersistedFuelState } from "./fuelLevelReader.js";
 import { computeEcoBar } from "./ecoBar.js";
 import { DATA_MAP, WARNING_KEYS } from "./dataKeys.js";
 import DataStore from "./DataStore.js";
 import RingBuffer from "./lib/ringBuffer.js";
 import { vehicleTimeMs } from "./CAN/canTime.js";
+import { TANK_CAPACITY_GALLONS } from "../settings/vehicleConfig.js";
 //import ButtonManager from "./IO/Buttons.js";
 //import piShutdown from "./IO/piShutdown.js";
 
@@ -35,6 +36,7 @@ export default (carSettings, canChannel) => {
 	}
 	const decoder = msDecoder;
 	let stopFuelLevelUpdater = null;
+	let replayFuelState = null;
 
 	/**
 	 * Initialize the Odometer reading with the last known saved readout
@@ -66,8 +68,7 @@ export default (carSettings, canChannel) => {
 	  // fuel updates must NOT mark CAN as fresh
 	});
 			} else {
-				ecuDataStore.write(DATA_MAP.FUEL_GALLONS_USED, 0);
-				ecuDataStore.write(DATA_MAP.FUEL_GALLONS_SINCE_REFILL, 0);
+				replayFuelState = seedPersistedFuelState(ecuDataStore);
 			}
 
 
@@ -114,6 +115,32 @@ export default (carSettings, canChannel) => {
 		}
 
 		ecuDataStore.update(dataKey, data);
+
+		if (
+			process.env.STARTUP_MODE === "replay_logs" &&
+			replayFuelState &&
+			dataKey === DATA_MAP.FUEL_GALLONS_USED
+		) {
+			const replayGallonsUsed = Math.max(0, Number(data) || 0);
+			const startingPercent = Number(replayFuelState.fuelPercent);
+			if (Number.isFinite(startingPercent)) {
+				const startingGallons =
+					Math.max(0, Math.min(100, startingPercent)) / 100 *
+					TANK_CAPACITY_GALLONS;
+				const remainingGallons = Math.max(
+					0,
+					startingGallons - replayGallonsUsed
+				);
+				ecuDataStore.write(
+					DATA_MAP.FUEL_LEVEL,
+					remainingGallons / TANK_CAPACITY_GALLONS * 100
+				);
+			}
+			ecuDataStore.write(
+				DATA_MAP.FUEL_GALLONS_SINCE_REFILL,
+				Math.max(0, replayFuelState.gallonsSinceRefill) + replayGallonsUsed
+			);
+		}
 	};
 
 	const canUpdate = (msg) => {

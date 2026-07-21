@@ -5,5 +5,6 @@ module.exports = {
   src: path.resolve(__dirname, '../src'),
 
   // Production build files
-  build: path.resolve(__dirname, '../dist'),
+  // Match the directory served by src/webserver.js.
+  build: path.resolve(__dirname, '../../dist'),
 }

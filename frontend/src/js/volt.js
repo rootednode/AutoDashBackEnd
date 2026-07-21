@@ -1,12 +1,21 @@
 export default {
 
+  setWarning: function (on) {
+    const img = this.update.img;
+    if (!img) return;
+    img.style.opacity = on ? "1" : ".3";
+    img.classList.toggle("indicator-active", on);
+  },
+
   initialize: function () {
     this.update.img = document.getElementById("battery");
+    this.update.value = document.getElementById("voltdisplay");
 
     // default = dim
     if (this.update.img) {
-      this.update.img.style.opacity = ".3";
+      this.setWarning(false);
     }
+    if (this.update.value) this.update.value.textContent = "--";
   },
 
   update: function (volt, noComm) {
@@ -15,18 +24,23 @@ export default {
     if (!this.update.img) {
       this.update.img = document.getElementById("battery");
       if (this.update.img) {
-        this.update.img.style.opacity = ".3";
+        this.setWarning(false);
       }
+    }
+    if (!this.update.value) {
+      this.update.value = document.getElementById("voltdisplay");
     }
 
     const img = this.update.img;
+    const valueDisplay = this.update.value;
     if (!img) return;
 
     // ----------------------------
     // NO COMM → DIM
     // ----------------------------
     if (noComm) {
-      img.style.opacity = ".3";
+      this.setWarning(false);
+      if (valueDisplay) valueDisplay.textContent = "--";
       return;
     }
 
@@ -35,14 +49,15 @@ export default {
     // ----------------------------
     volt = Number(volt);
     if (!Number.isFinite(volt)) {
-      img.style.opacity = ".3";
+      this.setWarning(false);
+      if (valueDisplay) valueDisplay.textContent = "--";
       return;
     }
 
     // ----------------------------
     // WARNING LOGIC
     // ----------------------------
-    img.style.opacity = volt < 13.0 ? "1" : ".3";
+    if (valueDisplay) valueDisplay.textContent = volt.toFixed(1);
+    this.setWarning(volt < 13.0);
   }
 };
-

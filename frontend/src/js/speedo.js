@@ -23,16 +23,14 @@ update: function (speed, odo, trip, mpg, avgMpg, histMpg, noComm) {
     this.update.elSpeed = document.getElementById("digispeed");
   if (!this.update.elOdo)
     this.update.elOdo   = document.getElementById("odometer");
-  if (!this.update.elTrip)
+  if (!this.update.elMpg)
     this.update.elMpg   = document.getElementById("mpgdisplay");
 
 	//console.log(speed, odo, trip, mpg, avgMpg, histMpg);
 
   var elSpeed  = this.update.elSpeed;
   var elOdo    = this.update.elOdo;
-  var elTrip   = this.update.elTrip;
   var elMpg    = this.update.elMpg;
-  var elAvgMpg = this.update.elAvgMpg;
 
   try {
     // -------------------
@@ -98,4 +96,3 @@ update: function (speed, odo, trip, mpg, avgMpg, histMpg, noComm) {
 
 
 };
-

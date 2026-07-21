@@ -45,11 +45,12 @@ const stoppedFuelSamples = [];
 const calibrationSamples = [];
 
 // Sender
-// The sender reads lower as the tank fills. Do not use a positive cutoff here:
-// valid full-tank readings can fall close to zero and were being mistaken for
-// an open sender. Zero/negative ADS1115 readings still identify the unpowered
-// or disconnected circuit, after the confirmation delay below.
-const RAW_DISCONNECTED_THRESHOLD = 0;
+// The sender reads lower as the tank fills. Use a calibration-aware floor so
+// key-off ADC noise near zero cannot be clamped to 100% and persisted, while
+// still allowing legitimate full-tank readings near the calibrated rawMin.
+const MIN_RAW_DISCONNECTED_THRESHOLD = 5;
+const MAX_RAW_DISCONNECTED_THRESHOLD = 50;
+const RAW_MIN_DISCONNECT_RATIO = 0.1;
 const SENDER_DISCONNECT_CONFIRM_MS = 1_500;
 const FUEL_INVALID = -1;
 
@@ -270,6 +271,24 @@ let gallonsSinceRefuel = loadUsed();
 let tripGallonsUsed = 0;
 
 let lastTime = Date.now();
+
+export function seedPersistedFuelState(ecuDataStore) {
+  ecuDataStore.write(DATA_MAP.FUEL_GALLONS_SINCE_REFILL, gallonsSinceRefuel);
+  ecuDataStore.write(DATA_MAP.FUEL_GALLONS_USED, 0);
+
+  if (Number.isFinite(lastFuelPct)) {
+    ecuDataStore.write(DATA_MAP.FUEL_LEVEL, lastFuelPct);
+    ecuDataStore.write(DATA_MAP.FUEL_SENDER_CONNECTED, 1);
+  } else {
+    ecuDataStore.write(DATA_MAP.FUEL_LEVEL, FUEL_INVALID);
+    ecuDataStore.write(DATA_MAP.FUEL_SENDER_CONNECTED, 0);
+  }
+
+  return {
+    fuelPercent: Number.isFinite(lastFuelPct) ? lastFuelPct : null,
+    gallonsSinceRefill: gallonsSinceRefuel
+  };
+}
 
 function saveFuelPctNow(pct) {
   saveFuelPct(pct);
@@ -529,9 +548,16 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
     // Judge connectivity from the actual sample, not the moving average.
     // Failed reads and key-off zeroes must never poison the smoothing window,
     // otherwise one intermittent I2C error can hold the gauge at null.
+    const disconnectedThreshold = Math.max(
+      MIN_RAW_DISCONNECTED_THRESHOLD,
+      Math.min(
+        MAX_RAW_DISCONNECTED_THRESHOLD,
+        rawMin * RAW_MIN_DISCONNECT_RATIO
+      )
+    );
     const validSenderSample =
       Number.isFinite(rawSample) &&
-      rawSample > RAW_DISCONNECTED_THRESHOLD;
+      rawSample > disconnectedThreshold;
 
     if (!validSenderSample) {
       if (senderInvalidSince === null) senderInvalidSince = now;

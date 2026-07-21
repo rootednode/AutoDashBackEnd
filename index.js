@@ -67,7 +67,8 @@ async function replayAllLogs() {
     files = fs.readdirSync(logDirectory, { withFileTypes: true })
       .filter((entry) => entry.isFile() && entry.name.endsWith('.log'))
       .map((entry) => path.join(logDirectory, entry.name))
-      .sort();
+      .sort()
+      .reverse();
   }
 
   console.log(`[CAN-REPLAY] Replaying ${files.length} log(s) at ${speed}x`);

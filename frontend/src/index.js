@@ -1,5 +1,8 @@
 "use strict";
 
+import "@fontsource/orbitron/400.css";
+import "@fontsource/orbitron/700.css";
+
 import { DATA_MAP } from "./js/common/dataMap";
 
 import tachometer from "./js/tachometer";
@@ -19,7 +22,7 @@ import sensors from "./js/sensors";
 import fuel from "./js/fuel";
 import canIndicator from "./js/canIndicator";
 import engineDetails from "./js/engineDetails";
-import { setEfficiencyWallpaperTint } from "./js/common/gaugeColor";
+import { TANK_CAPACITY_GALLONS } from "./js/common/vehicleConfig";
 
 // --------------------------------------------------
 // WORKER
@@ -63,6 +66,7 @@ function numberValue(dataKey) {
 
 function beginDriveSession(now) {
   engineDetails.startSession();
+  status.startSession();
   driveSession = {
     startedAt: now,
     lastDataAt: now,
@@ -71,6 +75,12 @@ function beginDriveSession(now) {
     idleMilliseconds: 0,
     startFuel: numberValue(DATA_MAP.FUEL_GALLONS_USED),
     endFuel: numberValue(DATA_MAP.FUEL_GALLONS_USED),
+    fuelUsed: 0,
+    lastTripFuel: numberValue(DATA_MAP.FUEL_GALLONS_USED),
+    lastTankFuel: numberValue(DATA_MAP.FUEL_GALLONS_SINCE_REFILL),
+    lastFuelPercent: Math.max(0, numberValue(DATA_MAP.FUEL_LEVEL)),
+    lowestFuelPercentSinceRefill: Math.max(0, numberValue(DATA_MAP.FUEL_LEVEL)),
+    refills: [],
     startOdometer: numberValue(DATA_MAP.CURRENT_ODOMETER),
     endOdometer: numberValue(DATA_MAP.CURRENT_ODOMETER),
     maxRpm: 0,
@@ -123,7 +133,43 @@ function recordDriveSample() {
   driveSession.lastSampleAt = now;
   driveSession.lastWallSampleAt = wallNow;
   driveSession.lastDataAt = now;
-  driveSession.endFuel = numberValue(DATA_MAP.FUEL_GALLONS_USED);
+  const tripFuel = numberValue(DATA_MAP.FUEL_GALLONS_USED);
+  const tripFuelDelta = tripFuel - driveSession.lastTripFuel;
+  if (tripFuelDelta >= 0 && tripFuelDelta < 0.25) {
+    driveSession.fuelUsed += tripFuelDelta;
+  }
+  driveSession.lastTripFuel = tripFuel;
+  driveSession.endFuel = tripFuel;
+
+  const tankFuel = numberValue(DATA_MAP.FUEL_GALLONS_SINCE_REFILL);
+  const fuelPercent = numberValue(DATA_MAP.FUEL_LEVEL);
+  const tankCounterReset =
+    driveSession.lastTankFuel > 0.05 &&
+    tankFuel < driveSession.lastTankFuel - 0.05 &&
+    tankFuel < 0.1;
+  if (tankCounterReset) {
+    driveSession.refills.push({
+      at: now,
+      beforePercent: driveSession.lowestFuelPercentSinceRefill,
+      afterPercent: fuelPercent,
+      gallonsBeforeRefill: driveSession.lastTankFuel
+    });
+    driveSession.lowestFuelPercentSinceRefill = fuelPercent;
+  } else if (driveSession.refills.length > 0) {
+    const latestRefill = driveSession.refills[driveSession.refills.length - 1];
+    latestRefill.afterPercent = Math.max(latestRefill.afterPercent, fuelPercent);
+    driveSession.lowestFuelPercentSinceRefill = Math.min(
+      driveSession.lowestFuelPercentSinceRefill,
+      fuelPercent
+    );
+  } else {
+    driveSession.lowestFuelPercentSinceRefill = Math.min(
+      driveSession.lowestFuelPercentSinceRefill,
+      fuelPercent
+    );
+  }
+  driveSession.lastTankFuel = tankFuel;
+  driveSession.lastFuelPercent = fuelPercent;
   driveSession.endOdometer = numberValue(DATA_MAP.CURRENT_ODOMETER);
   driveSession.maxRpm = Math.max(driveSession.maxRpm, rpm);
   const mapKpa = numberValue(DATA_MAP.MAP);
@@ -213,7 +259,7 @@ function showDriveSummary() {
   const overlay = document.getElementById("drive-summary-overlay");
   if (!overlay) return;
   const duration = driveSession.lastDataAt - driveSession.startedAt;
-  const fuelUsed = Math.max(0, driveSession.endFuel - driveSession.startFuel);
+  const fuelUsed = Math.max(0, driveSession.fuelUsed);
   const distance = Math.max(
     0,
     driveSession.endOdometer - driveSession.startOdometer
@@ -221,6 +267,26 @@ function showDriveSummary() {
   const calculatedMpg = fuelUsed > 0.001
     ? distance / fuelUsed
     : driveSession.reportedAverageMpg;
+  const fuelPercent = numberValue(DATA_MAP.FUEL_LEVEL);
+  const senderConnected = numberValue(DATA_MAP.FUEL_SENDER_CONNECTED) === 1;
+  const tankFuelUsed = numberValue(DATA_MAP.FUEL_GALLONS_SINCE_REFILL);
+  const fallbackTankFuelUsed = tankFuelUsed > 0 ? tankFuelUsed : driveSession.fuelUsed;
+  const remainingFuel = senderConnected && Number.isFinite(fuelPercent) && fuelPercent >= 0
+    ? Math.max(
+        0,
+        Math.min(TANK_CAPACITY_GALLONS, fuelPercent / 100 * TANK_CAPACITY_GALLONS)
+      )
+    : Math.max(
+        0,
+        TANK_CAPACITY_GALLONS - fallbackTankFuelUsed
+      );
+  const historicalMpg = numberValue(DATA_MAP.HISTORICAL_MPG);
+  const rangeMpg = calculatedMpg > 0
+    ? calculatedMpg
+    : historicalMpg > 0
+      ? historicalMpg
+      : 0;
+  const estimatedRange = remainingFuel * rangeMpg;
   const averageAfr = driveSession.afrSamples > 0
     ? driveSession.afrTotal / driveSession.afrSamples
     : null;
@@ -269,6 +335,31 @@ function showDriveSummary() {
   setSummaryText("drive-summary-speed", `${driveSession.maxSpeed.toFixed(1)} mph`);
   setSummaryText("drive-summary-distance", `${distance.toFixed(1)} mi`);
   setSummaryText("drive-summary-fuel", `${fuelUsed.toFixed(2)} gal`);
+  setSummaryText(
+    "drive-summary-fuel-remaining",
+    `${remainingFuel.toFixed(1)} gal`
+  );
+  setSummaryText(
+    "drive-summary-range",
+    rangeMpg > 0 ? `${Math.round(estimatedRange)} mi` : "--"
+  );
+  const refillSummary = document.getElementById("drive-summary-refill");
+  if (refillSummary) {
+    const refillCount = driveSession.refills.length;
+    refillSummary.classList.toggle("visible", refillCount > 0);
+    if (refillCount > 0) {
+      const latestRefill = driveSession.refills[refillCount - 1];
+      setSummaryText("drive-summary-refill-count", String(refillCount));
+      setSummaryText(
+        "drive-summary-refill-level",
+        `${Math.round(latestRefill.beforePercent)}% → ${Math.round(latestRefill.afterPercent)}%`
+      );
+      setSummaryText(
+        "drive-summary-refill-counter",
+        `${latestRefill.gallonsBeforeRefill.toFixed(2)} gal`
+      );
+    }
+  }
   setSummaryText(
     "drive-summary-mpg",
     calculatedMpg > 0 ? calculatedMpg.toFixed(1) : "--"
@@ -341,6 +432,29 @@ function showDriveSummary() {
       item.append(label, value);
       return item;
     }));
+  }
+  const warningContainer = document.getElementById("drive-summary-warnings");
+  if (warningContainer) {
+    const warningEvents = status.getSessionSummary();
+    if (warningEvents.length === 0) {
+      const item = document.createElement("div");
+      const label = document.createElement("span");
+      const value = document.createElement("strong");
+      label.textContent = "NO WARNINGS";
+      value.textContent = "CLEAR DRIVE";
+      item.append(label, value);
+      warningContainer.replaceChildren(item);
+    } else {
+      warningContainer.replaceChildren(...warningEvents.slice(-8).map((event) => {
+        const item = document.createElement("div");
+        const label = document.createElement("span");
+        const value = document.createElement("strong");
+        label.textContent = event.label;
+        value.textContent = `${event.detail} · ${Math.round(event.rpm)} RPM`;
+        item.append(label, value);
+        return item;
+      }));
+    }
   }
   overlay.classList.add("visible");
   overlay.setAttribute("aria-hidden", "false");
@@ -441,7 +555,12 @@ const renderDashboard = () => {
     const rpm = updateData[DATA_MAP.RPM.id];
     tachometer.update(rpm, isCommError);
 
-    try { map.update(updateData[DATA_MAP.MAP.id], isCommError); } catch {}
+    try {
+      map.update(
+        updateData[DATA_MAP.MAP.id],
+        isCommError
+      );
+    } catch {}
     try { afr.update(updateData[DATA_MAP.AFR.id], isCommError); } catch {}
     try { ego.update(updateData[DATA_MAP.EGO.id], isCommError); } catch {}
     try { tpsdot.update(updateData[DATA_MAP.TPS_DOT.id], isCommError); } catch {}
@@ -464,6 +583,8 @@ const renderDashboard = () => {
           updateData[DATA_MAP.FUEL_LEVEL.id],
           updateData[DATA_MAP.FUEL_GALLONS_USED.id],
           updateData[DATA_MAP.FUEL_GALLONS_SINCE_REFILL.id],
+          updateData[DATA_MAP.AVERAGE_MPG.id],
+          updateData[DATA_MAP.HISTORICAL_MPG.id],
           updateData[DATA_MAP.FUEL_SENDER_CONNECTED.id],
           isCommError
         );
@@ -485,14 +606,6 @@ const renderDashboard = () => {
       try { tps.update(updateData[DATA_MAP.TPS.id], isCommError); } catch {}
       try { mat.update(updateData[DATA_MAP.MAT.id], isCommError); } catch {}
       try { eco.update(updateData[DATA_MAP.ECO.id], isCommError); } catch {}
-      try {
-        setEfficiencyWallpaperTint({
-          eco: updateData[DATA_MAP.ECO.id],
-          speed: updateData[DATA_MAP.SPEEDO.id],
-          rpm: updateData[DATA_MAP.RPM.id],
-          noComm: isCommError
-        });
-      } catch {}
       try { volt.update(updateData[DATA_MAP.VOLT.id], isCommError); } catch {}
       try { adv.update(updateData[DATA_MAP.ADV.id], isCommError); } catch {}
 
@@ -507,7 +620,16 @@ const renderDashboard = () => {
           updateData[DATA_MAP.STATUS6.id],
           updateData[DATA_MAP.STATUS7.id],
           updateData[DATA_MAP.STATUS8.id],
-          isCommError
+          isCommError,
+          updateData[DATA_MAP.RPM.id],
+          updateData[DATA_MAP.SENSOR2.id],
+          updateData[DATA_MAP.SENSOR3.id],
+          updateData[DATA_MAP.SENSOR4.id],
+          updateData[DATA_MAP.MAP.id],
+          updateData[DATA_MAP.TPS.id],
+          updateData[DATA_MAP.AFR.id],
+          updateData[DATA_MAP.SPEEDO.id],
+          latestVehicleTime
         );
       } catch { console.log('status err'); }
 
