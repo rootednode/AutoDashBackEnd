@@ -112,6 +112,11 @@ function drawPeakNeedle(gauge) {
   const peak = peakByGauge.get(gauge);
   if (!Number.isFinite(peak)) return;
 
+  if (typeof gauge.setPeakValue === "function") {
+    gauge.setPeakValue(peak);
+    return;
+  }
+
   if (gauge.canvas?.context?.barDimensions) {
     drawLinearPeakNeedle(gauge, peak);
   } else {

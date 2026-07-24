@@ -72,11 +72,19 @@ async function replayAllLogs() {
   }
 
   console.log(`[CAN-REPLAY] Replaying ${files.length} log(s) at ${speed}x`);
-  for (const filename of files) {
-    if (stopping) break;
-    await playLog(filename, speed);
+  do {
+    for (const filename of files) {
+      if (stopping) break;
+      await playLog(filename, speed);
+    }
+    if (!stopping && !requestedLog) {
+      console.log('[CAN-REPLAY] All logs complete; restarting from the first log');
+    }
+  } while (!stopping && !requestedLog);
+
+  if (!stopping && requestedLog) {
+    console.log('[CAN-REPLAY] Selected log complete; dashboard remains online');
   }
-  if (!stopping) console.log('[CAN-REPLAY] All logs complete; dashboard remains online');
 }
 
 try {

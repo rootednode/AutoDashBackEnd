@@ -2,6 +2,11 @@
 // status.js — MS3 engine + status bitfield decoding with debug
 //
 
+import {
+  ATMOSPHERIC_PRESSURE_KPA,
+  KPA_TO_PSI
+} from "./common/vehicleConfig";
+
 // -------------------------------------------------------------
 // DEBUG SETTINGS
 // -------------------------------------------------------------
@@ -21,7 +26,6 @@ const FUEL_WARNING_DEBOUNCE_MS = 750;
 const AFR_WARNING_DEBOUNCE_MS = 500;
 const ENGINE_RUNNING_RPM = 500;
 const MIN_FUEL_DIFFERENTIAL_PSI = 35;
-const KPA_TO_PSI = 0.145038;
 let warningLatchedUntil = 0;
 let lowOilSince = null;
 let lowFuelPressureSince = null;
@@ -75,6 +79,12 @@ function setOilPressureWarning(on) {
   if (container) container.classList.toggle("oil-pressure-warning", on);
 }
 
+function setAfrWarning(on) {
+  const container = document.getElementById("afr_container");
+  if (container) container.classList.toggle("afr-warning", on);
+  document.body.classList.toggle("afr-warning-active", on);
+}
+
 function setWarningLabel(label) {
   const element = document.getElementById("warning-label");
   if (element) element.textContent = label || "WARN";
@@ -110,7 +120,8 @@ function fuelPressureWarning(rpm, mapKpa, fuelPressure, now) {
     return { active: false, differential: null };
   }
 
-  const manifoldGaugePsi = (mapKpa - 101.325) * KPA_TO_PSI;
+  const manifoldGaugePsi =
+    (mapKpa - ATMOSPHERIC_PRESSURE_KPA) * KPA_TO_PSI;
   const differential = fuelPressure - manifoldGaugePsi;
   if (differential >= MIN_FUEL_DIFFERENTIAL_PSI) {
     lowFuelPressureSince = null;
@@ -181,6 +192,7 @@ function resetIndicators(reason = "reset") {
   setIndicator("idle", false);
   setIndicator("overheat", false);
   setOilPressureWarning(false);
+  setAfrWarning(false);
   setWarningLabel("WARN");
 }
 
@@ -417,6 +429,7 @@ export default {
     const oilWarning = oilPressureWarning(rpm, oilPressure, now);
     const fuelWarning = fuelPressureWarning(rpm, mapKpa, fuelPressure, now);
     const leanWarning = leanUnderLoadWarning(rpm, mapKpa, tps, afr, now);
+    const afrWarningActive = leanWarning.active || flags.afrWarn || flags.afrSd;
     const warnings = [];
     if (oilWarning) {
       warnings.push({
@@ -456,7 +469,7 @@ export default {
 
     if (activeWarning) {
       warningLatchedUntil = now + WARNING_MEMORY_MS;
-      rememberedWarningLabel = warnings[0].label;
+      rememberedWarningLabel = afrWarningActive ? "AFR!" : warnings[0].label;
     }
     const rememberedWarning = activeWarning || now < warningLatchedUntil;
 
@@ -498,5 +511,6 @@ export default {
     setIndicator("warning", indicatorState.warning);
     setWarningLabel(rememberedWarning ? rememberedWarningLabel : "WARN");
     setOilPressureWarning(oilWarning);
+    setAfrWarning(afrWarningActive);
   },
 };

@@ -22,6 +22,10 @@ class CanbusManager {
         this.channel.addListener('onMessage', (msg) => {
           this.resetTimeout();
 
+          if (global.CAN?.simulated === false && global.CAN?.iface === 'can0') {
+            global.CAN.realTrafficSeen = true;
+          }
+
           // 🔥 LOG CAN FRAME HERE
           logCAN(msg);
 

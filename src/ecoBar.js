@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { DATA_MAP } from "./dataKeys.js";
 import { computeFuelGPH } from "./fuelFlow.js";
+import { isRealVehicleCan } from "./vehiclePersistence.js";
 
 // Sampling and speed bins
 const SAMPLE_MS = 100;
@@ -92,9 +93,7 @@ function loadBins() {
 loadBins();
 
 function scheduleSave() {
-  if (process.env.STARTUP_MODE === "replay_logs") return;
-  if (global.CAN?.iface === "vcan0") return;
-  if (process.env.TYPE === "development") return;
+  if (!isRealVehicleCan()) return;
   if (saveTimer) return;
 
   saveTimer = setTimeout(() => {

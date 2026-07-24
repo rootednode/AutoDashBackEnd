@@ -6,6 +6,7 @@ import { appSettingsManager } from './appSettingsManager.js'
 import DashContentWebServer from './webserver.js'
 import { DATA_MAP } from './dataKeys.js'
 import { vehicleTimeMs } from './CAN/canTime.js'
+import { isRealVehicleCan } from './vehiclePersistence.js'
 
 import fs from 'fs';
 import path from 'path';
@@ -86,16 +87,13 @@ updateInterval = setInterval(() => {
       //file saving
       if (settings.ecu.persist) {
         savingUpdateInterval = setInterval(() => {
-
-					if (global.CAN?.iface === "vcan0") return;
-					if (process.env.TYPE === "development") return;
-
+          if (!isRealVehicleCan()) return;
           console.log('saving persistant data');
           appSettings.saveSettings(ecu.persistantData());
         }, SAVE_FREQ);
 
       } else {
-        console.log('AutoDash: No persisting data');
+        console.log('AutoDash: Persistent data disabled by settings');
       }
     } catch (error) {
       onError(error);

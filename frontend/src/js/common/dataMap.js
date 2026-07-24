@@ -39,6 +39,7 @@ export const DATA_MAP = {
   AFR: { id: keygen(), byteType: TYPES.FLOAT },
   EGO: { id: keygen(), byteType: TYPES.FLOAT },
   MAP: { id: keygen(), byteType: TYPES.INT16 },
+  BARO: { id: keygen(), byteType: TYPES.FLOAT },
   MAT: { id: keygen(), byteType: TYPES.INT16 },
   TPS: { id: keygen(), byteType: TYPES.INT16 },
   CTS: { id: keygen(), byteType: TYPES.INT16 },
@@ -74,6 +75,7 @@ export const DATA_MAP = {
   FUEL_LEVEL: { id: keygen(), byteType: TYPES.INT16 },
   FUEL_GALLONS_USED: { id: keygen(), byteType: TYPES.FLOAT },
 	FUEL_GALLONS_SINCE_REFILL: { id: keygen(), byteType: TYPES.FLOAT },
+  FUEL_GALLONS_REMAINING: { id: keygen(), byteType: TYPES.FLOAT },
 
   CURRENT_MPG: { id: keygen(), byteType: TYPES.FLOAT },
   AVERAGE_MPG: { id: keygen(), byteType: TYPES.FLOAT },

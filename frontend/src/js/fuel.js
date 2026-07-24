@@ -5,16 +5,19 @@ export default {
   initialize: function () {
     this.update.g = document.gauges.get("fuellevelgauge");
     this.update.elGal = document.getElementById("galdisplay");
+    this.update.elGalValue = document.getElementById("galdisplay-value");
+    this.update.elRange = document.getElementById("range-display");
 
     // Startup default only
-    if (this.update.elGal)
-      this.update.elGal.textContent = "0.0 / 0.0 / 0.0";
+    if (this.update.elGalValue)
+      this.update.elGalValue.textContent = "0.0 / 0.0 / 0.0";
   },
 
   update: function (
     fuel,
     gallons,
     gallonssincelastrefill,
+    gallonsRemaining,
     averageMpg,
     historicalMpg,
     senderConnected,
@@ -31,6 +34,8 @@ export default {
 
     const gauge = this.update.g;
     const elGal = this.update.elGal;
+    const elGalValue = this.update.elGalValue || document.getElementById("galdisplay-value");
+    const elRange = this.update.elRange || document.getElementById("range-display");
 
     // ----- Gallons display -----
     if (elGal) {
@@ -39,9 +44,12 @@ export default {
       const fuelPercent = Number(fuel);
       const senderIsValid = Number(senderConnected) === 1;
       const tankGallonsUsed = senderIsValid || g2 > 0 ? g2 : g1;
-      const remainingGallons = senderIsValid && Number.isFinite(fuelPercent) && fuelPercent >= 0
-        ? Math.max(0, Math.min(TANK_CAPACITY_GALLONS, fuelPercent / 100 * TANK_CAPACITY_GALLONS))
-        : Math.max(0, TANK_CAPACITY_GALLONS - tankGallonsUsed);
+      const backendRemaining = Number(gallonsRemaining);
+      const remainingGallons = Number.isFinite(backendRemaining) && backendRemaining >= 0
+        ? Math.min(TANK_CAPACITY_GALLONS, backendRemaining)
+        : senderIsValid && Number.isFinite(fuelPercent) && fuelPercent >= 0
+          ? Math.max(0, Math.min(TANK_CAPACITY_GALLONS, fuelPercent / 100 * TANK_CAPACITY_GALLONS))
+          : Math.max(0, TANK_CAPACITY_GALLONS - tankGallonsUsed);
       const tripMpg = Number(averageMpg);
       const lifetimeMpg = Number(historicalMpg);
       const rangeMpg = Number.isFinite(tripMpg) && tripMpg > 0
@@ -50,8 +58,10 @@ export default {
           ? lifetimeMpg
           : 0;
       const estimatedRange = remainingGallons * rangeMpg;
-      elGal.textContent = `${g1.toFixed(1)} / ${tankGallonsUsed.toFixed(1)} / ${remainingGallons.toFixed(1)}`;
-      elGal.dataset.range = rangeMpg > 0
+      if (elGalValue) {
+        elGalValue.textContent = `${g1.toFixed(1)} / ${tankGallonsUsed.toFixed(1)} / ${remainingGallons.toFixed(1)}`;
+      }
+      if (elRange) elRange.textContent = rangeMpg > 0
         ? `RANGE ${Math.round(estimatedRange)} MI`
         : "RANGE --";
     }

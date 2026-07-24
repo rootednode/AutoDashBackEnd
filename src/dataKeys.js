@@ -31,6 +31,7 @@ export const DATA_MAP = {
   AFR: { id: keygen(), byteType: TYPES.FLOAT },
   EGO: { id: keygen(), byteType: TYPES.FLOAT },
   MAP: { id: keygen(), byteType: TYPES.INT16 }, // units 1 === 1 (PRESSURE_TYPE) (defaults to kpa if not set)
+  BARO: { id: keygen(), byteType: TYPES.FLOAT }, // absolute atmospheric pressure in kPa
   MAT: { id: keygen(), byteType: TYPES.INT16 }, //manifold temp 
   TPS: { id: keygen(), byteType: TYPES.INT16 },
   CTS: { id: keygen(), byteType: TYPES.INT16 },  // coolant (defaults to F if TEMP_TYPE isnt set )
@@ -67,6 +68,7 @@ export const DATA_MAP = {
   FUEL_LEVEL: { id: keygen(), byteType: TYPES.INT16 }, // 0-100%
   FUEL_GALLONS_USED: { id: keygen(), byteType: TYPES.FLOAT },
   FUEL_GALLONS_SINCE_REFILL: { id: keygen(), byteType: TYPES.FLOAT },
+  FUEL_GALLONS_REMAINING: { id: keygen(), byteType: TYPES.FLOAT },
 
   CURRENT_MPG: { id: keygen(), byteType: TYPES.FLOAT },
   AVERAGE_MPG: { id: keygen(), byteType: TYPES.FLOAT },

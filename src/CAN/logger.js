@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { isRealVehicleCan } from '../vehiclePersistence.js';
 
 const LOG_DIR = path.join(process.cwd(), 'logs');
 if (!fs.existsSync(LOG_DIR)) {
@@ -22,8 +23,7 @@ function openLogIfNeeded() {
 }
 
 export function logCAN(msg) {
-  // 🚫 Never log simulated CAN
-  if (global.CAN?.simulated) return;
+  if (!isRealVehicleCan()) return;
 
   try {
     const { ts_sec, ts_usec, id, data } = msg;

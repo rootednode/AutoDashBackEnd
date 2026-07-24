@@ -1,7 +1,12 @@
 import i2c from "i2c-bus";
 import fs from "fs";
+import path from "path";
+import { performance } from "perf_hooks";
+import { fileURLToPath } from "url";
 import { DATA_MAP } from "./dataKeys.js";
 import { computeFuelGPH } from "./fuelFlow.js";
+import { TANK_CAPACITY_GALLONS } from "../settings/vehicleConfig.js";
+import { isRealVehicleCan } from "./vehiclePersistence.js";
 
 const ADS1115_ADDR = 0x48;
 const bus = i2c.openSync(1);
@@ -13,9 +18,11 @@ const dbg = (...args) => DEBUG_FUEL;
 // ─────────────────────────────────────────────
 // CONFIG
 // ─────────────────────────────────────────────
-const CAL_FILE   = "./data/fuelCal.json";
-const USED_FILE  = "./data/fuelUsed.json";
-const PCT_FILE   = "./data/fuelPct.json";
+const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const CAL_FILE   = path.join(PROJECT_ROOT, "data/fuelCal.json");
+const USED_FILE  = path.join(PROJECT_ROOT, "data/fuelUsed.json");
+const PCT_FILE   = path.join(PROJECT_ROOT, "data/fuelPct.json");
+const STATE_FILE = path.join(PROJECT_ROOT, "data/fuelState.json");
 
 const SAMPLE_MS = 100;
 const FUEL_PCT_SAVE_MIN_MS = 10_000;
@@ -31,6 +38,9 @@ const REFUEL_STABLE_WINDOW_MS = 10_000;
 const REFUEL_STABLE_MIN_SPAN_MS = 9_000;
 const REFUEL_STABLE_MIN_SAMPLES = 50;
 const REFUEL_STABLE_RANGE_PCT = 5;
+const PRE_STOP_BASELINE_WINDOW_MS = 10_000;
+const PRE_STOP_BASELINE_MIN_SPAN_MS = 3_000;
+const PRE_STOP_BASELINE_MIN_SAMPLES = 20;
 const MAX_LEARN_STEP = 500;
 const CAL_LEARN_WINDOW_MS = 20_000;
 const CAL_LEARN_MIN_SPAN_MS = 19_000;
@@ -42,6 +52,7 @@ const OBSERVED_RAW_MAX_SAVE_MS = 30_000;
 let stoppedBaselinePct = null;
 let stoppedSince = null;
 const stoppedFuelSamples = [];
+const preStopFuelSamples = [];
 const calibrationSamples = [];
 
 // Sender
@@ -77,8 +88,7 @@ function smoothMA(raw) {
 }
 
 function saveCalibration() {
-  if (global.CAN?.iface === "vcan0") return;
-  if (process.env.TYPE === "development") return;
+  if (!isRealVehicleCan()) return;
 
   const calibrationJson = JSON.stringify({
     _comment: "rawMin/rawMax calibrate the gauge; observedRawMax is the highest valid smoothed reading seen",
@@ -136,8 +146,7 @@ function loadCalibration() {
 
   const cal = { rawMin: 200, rawMax: 13500 };
 
-  if (global.CAN?.iface === "vcan0") return cal;
-  if (process.env.TYPE === "development") return cal;
+  if (!isRealVehicleCan()) return cal;
 
   fs.writeFileSync(CAL_FILE, JSON.stringify(cal));
 
@@ -168,7 +177,7 @@ dbg("Calibration", {
 // ─────────────────────────────────────────────
 // PERSISTENCE
 // ─────────────────────────────────────────────
-function loadUsed() {
+function loadLegacyUsed() {
   try {
     return JSON.parse(fs.readFileSync(USED_FILE, "utf8")).used || 0;
   } catch {
@@ -176,22 +185,39 @@ function loadUsed() {
   }
 }
 
-function saveUsed(val) {
-  if (global.CAN?.iface === "vcan0") return;
-  if (process.env.TYPE === "development") return;
+function persistenceDisabled() {
+  return !isRealVehicleCan();
+}
 
-  dbg("saveUsed called", {
-    val,
+function atomicWriteJson(filename, value) {
+  const tempFile = `${filename}.tmp`;
+  fs.writeFileSync(tempFile, JSON.stringify(value, null, 2));
+  fs.renameSync(tempFile, filename);
+}
+
+function saveFuelState() {
+  if (persistenceDisabled()) return;
+
+  dbg("saveFuelState called", {
+    gallonsSinceRefuel,
     TYPE: process.env.TYPE,
     iface: global.CAN?.iface,
-    file: USED_FILE,
+    file: STATE_FILE,
     cwd: process.cwd()
   });
 
-  fs.writeFileSync(USED_FILE, JSON.stringify({ used: val }));
+  atomicWriteJson(STATE_FILE, {
+    version: 1,
+    gallonsSinceRefuel,
+    lastReliablePercent: Number.isFinite(lastFuelPct) ? lastFuelPct : null,
+    anchorGallonsRemaining,
+    anchorGallonsUsed,
+    refuelBaselinePercent,
+    savedAt: new Date().toISOString()
+  });
 }
 
-function loadFuelPct() {
+function loadLegacyFuelPct() {
   try {
     return JSON.parse(fs.readFileSync(PCT_FILE, "utf8")).pct;
   } catch {
@@ -199,11 +225,40 @@ function loadFuelPct() {
   }
 }
 
-function saveFuelPct(pct) {
-  if (global.CAN?.iface === "vcan0") return;
-  if (process.env.TYPE === "development") return;
+function loadFuelState() {
+  try {
+    const state = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
+    const used = state.gallonsSinceRefuel;
+    const percent = state.lastReliablePercent;
+    const anchorRemaining = state.anchorGallonsRemaining;
+    const anchorUsed = state.anchorGallonsUsed;
+    const refuelBaseline = state.refuelBaselinePercent;
+    if (Number.isFinite(used) && used >= 0) {
+      return {
+        gallonsSinceRefuel: used,
+        lastFuelPct: Number.isFinite(percent) ? percent : null,
+        anchorGallonsRemaining: Number.isFinite(anchorRemaining)
+          ? anchorRemaining
+          : null,
+        anchorGallonsUsed: Number.isFinite(anchorUsed) ? anchorUsed : used,
+        refuelBaselinePercent: Number.isFinite(refuelBaseline)
+          ? refuelBaseline
+          : null
+      };
+    }
+  } catch {}
 
-  fs.writeFileSync(PCT_FILE, JSON.stringify({ pct }));
+  const gallonsSinceRefuel = loadLegacyUsed();
+  const lastFuelPct = loadLegacyFuelPct();
+  return {
+    gallonsSinceRefuel,
+    lastFuelPct,
+    anchorGallonsRemaining: Number.isFinite(lastFuelPct)
+      ? lastFuelPct / 100 * TANK_CAPACITY_GALLONS
+      : null,
+    anchorGallonsUsed: gallonsSinceRefuel,
+    refuelBaselinePercent: null
+  };
 }
 
 let lastSavedGallons = 0;
@@ -213,7 +268,7 @@ function maybeSaveUsed(val) {
   const now = Date.now();
 
   if (Math.abs(val - lastSavedGallons) > 0.01 || now - lastSaveTime > 5000) {
-    saveUsed(val);
+    saveFuelState();
     lastSavedGallons = val;
     lastSaveTime = now;
   }
@@ -261,20 +316,34 @@ function rawToPercent(raw) {
 // ─────────────────────────────────────────────
 // STATE
 // ─────────────────────────────────────────────
-let lastFuelPct = loadFuelPct();
+const persistedFuelState = loadFuelState();
+let lastFuelPct = persistedFuelState.lastFuelPct;
 let lastPersistedFuelPct = lastFuelPct;
 let lastFuelPctSaveTime = Date.now();
 let refuelLocked = false;
 let senderInvalidSince = null;
 
-let gallonsSinceRefuel = loadUsed();
+let gallonsSinceRefuel = persistedFuelState.gallonsSinceRefuel;
 let tripGallonsUsed = 0;
+let anchorGallonsRemaining = persistedFuelState.anchorGallonsRemaining;
+let anchorGallonsUsed = persistedFuelState.anchorGallonsUsed;
+let refuelBaselinePercent = persistedFuelState.refuelBaselinePercent;
 
-let lastTime = Date.now();
+let lastTime = performance.now();
+
+function estimatedGallonsRemaining() {
+  if (!Number.isFinite(anchorGallonsRemaining)) return -1;
+  const burnedSinceAnchor = Math.max(0, gallonsSinceRefuel - anchorGallonsUsed);
+  return Math.max(
+    0,
+    Math.min(TANK_CAPACITY_GALLONS, anchorGallonsRemaining - burnedSinceAnchor)
+  );
+}
 
 export function seedPersistedFuelState(ecuDataStore) {
   ecuDataStore.write(DATA_MAP.FUEL_GALLONS_SINCE_REFILL, gallonsSinceRefuel);
   ecuDataStore.write(DATA_MAP.FUEL_GALLONS_USED, 0);
+  ecuDataStore.write(DATA_MAP.FUEL_GALLONS_REMAINING, estimatedGallonsRemaining());
 
   if (Number.isFinite(lastFuelPct)) {
     ecuDataStore.write(DATA_MAP.FUEL_LEVEL, lastFuelPct);
@@ -286,12 +355,16 @@ export function seedPersistedFuelState(ecuDataStore) {
 
   return {
     fuelPercent: Number.isFinite(lastFuelPct) ? lastFuelPct : null,
-    gallonsSinceRefill: gallonsSinceRefuel
+    gallonsSinceRefill: gallonsSinceRefuel,
+    gallonsRemaining: estimatedGallonsRemaining()
   };
 }
 
 function saveFuelPctNow(pct) {
-  saveFuelPct(pct);
+  lastFuelPct = pct;
+  anchorGallonsRemaining = pct / 100 * TANK_CAPACITY_GALLONS;
+  anchorGallonsUsed = gallonsSinceRefuel;
+  saveFuelState();
   lastPersistedFuelPct = pct;
   lastFuelPctSaveTime = Date.now();
 }
@@ -465,12 +538,38 @@ function getStableStoppedFuelPercent(now, percent) {
   return median(percentages);
 }
 
+function trackPreStopFuelPercent(now, percent) {
+  preStopFuelSamples.push({ time: now, percent });
+
+  const windowStart = now - PRE_STOP_BASELINE_WINDOW_MS;
+  while (
+    preStopFuelSamples.length > 0 &&
+    preStopFuelSamples[0].time < windowStart
+  ) {
+    preStopFuelSamples.shift();
+  }
+}
+
+function getPreStopFuelBaseline(now) {
+  const windowStart = now - PRE_STOP_BASELINE_WINDOW_MS;
+  const samples = preStopFuelSamples.filter(
+    (sample) => sample.time >= windowStart
+  );
+  if (samples.length < PRE_STOP_BASELINE_MIN_SAMPLES) return null;
+
+  const sampleSpan = samples[samples.length - 1].time - samples[0].time;
+  if (sampleSpan < PRE_STOP_BASELINE_MIN_SPAN_MS) return null;
+
+  return median(samples.map((sample) => sample.percent));
+}
+
 // ─────────────────────────────────────────────
 // MAIN LOOP
 // ─────────────────────────────────────────────
-export default function fuelLevelUpdater(ecuDataStore, markFresh) {
+export default function fuelLevelUpdater(ecuDataStore, isCanFresh) {
   ecuDataStore.write(DATA_MAP.FUEL_GALLONS_SINCE_REFILL, gallonsSinceRefuel);
   ecuDataStore.write(DATA_MAP.FUEL_GALLONS_USED, tripGallonsUsed);
+  ecuDataStore.write(DATA_MAP.FUEL_GALLONS_REMAINING, estimatedGallonsRemaining());
 
   // Keep the last trustworthy reading on screen while the ADC and sender
   // power settle after startup. A sustained invalid signal below will still
@@ -500,16 +599,17 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
 
     try {
     const now = Date.now();
-    const dt = (now - lastTime) / 1000;
-    lastTime = now;
+    const monotonicNow = performance.now();
+    const dt = (monotonicNow - lastTime) / 1000;
+    lastTime = monotonicNow;
 
-    if (dt <= 0 || dt > 0.5) return;
+    if (dt <= 0) return;
 
     // ────────── FUEL USED (PW + RPM) ──────────
     const pwMs = ecuDataStore.read(DATA_MAP.PW1) || 0;
     const rpm  = ecuDataStore.read(DATA_MAP.RPM) || 0;
 
-    if (pwMs > 0.5 && rpm > 500) {
+    if (dt <= 2 && isCanFresh() && pwMs > 0.5 && rpm > 500) {
       const fuelPsi = ecuDataStore.read(DATA_MAP.SENSOR2);
       const mapKpa = ecuDataStore.read(DATA_MAP.MAP) || 101.325;
       const volts = ecuDataStore.read(DATA_MAP.VOLT) || 14.0;
@@ -527,6 +627,7 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
 
       ecuDataStore.write(DATA_MAP.FUEL_GALLONS_SINCE_REFILL, gallonsSinceRefuel);
       ecuDataStore.write(DATA_MAP.FUEL_GALLONS_USED, tripGallonsUsed);
+      ecuDataStore.write(DATA_MAP.FUEL_GALLONS_REMAINING, estimatedGallonsRemaining());
 
       maybeSaveUsed(gallonsSinceRefuel);
     }
@@ -569,6 +670,7 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
       resetCalibrationObservation();
       window.length = 0;
       ecuDataStore.write(DATA_MAP.FUEL_LEVEL, FUEL_INVALID);
+      ecuDataStore.write(DATA_MAP.FUEL_GALLONS_REMAINING, estimatedGallonsRemaining());
       return;
     }
 
@@ -603,16 +705,25 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
     );
 
     if (!stopped) {
+      trackPreStopFuelPercent(now, percent);
       resetStoppedRefuelObservation();
       refuelLocked = false;
+      refuelBaselinePercent = null;
     } else {
       if (stoppedSince === null) {
         stoppedSince = now;
-        // On startup this is the persisted pre-refill percentage. During
-        // normal operation it is the most recent reading before stopping.
-        stoppedBaselinePct = Number.isFinite(lastFuelPct)
-          ? lastFuelPct
-          : percent;
+        const preStopBaseline = getPreStopFuelBaseline(now);
+        stoppedBaselinePct = Number.isFinite(preStopBaseline)
+          ? preStopBaseline
+          : Number.isFinite(refuelBaselinePercent)
+            ? refuelBaselinePercent
+            : Number.isFinite(lastFuelPct)
+              ? lastFuelPct
+              : percent;
+        // Save the rolling median so a key-off fill still uses the readings
+        // gathered before parking when the application starts again.
+        refuelBaselinePercent = stoppedBaselinePct;
+        saveFuelState();
       }
 
       const stableFuelPct = getStableStoppedFuelPercent(now, percent);
@@ -638,14 +749,14 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
         stableFuelPct > REFUEL_MIN_PCT
       ) {
         gallonsSinceRefuel = 0;
-        tripGallonsUsed    = 0;
         lastSavedGallons   = 0;
+        lastFuelPct = stableFuelPct;
+        anchorGallonsRemaining = stableFuelPct / 100 * TANK_CAPACITY_GALLONS;
+        anchorGallonsUsed = 0;
         refuelLocked = true;
 
         ecuDataStore.write(DATA_MAP.FUEL_GALLONS_SINCE_REFILL, 0);
-        ecuDataStore.write(DATA_MAP.FUEL_GALLONS_USED, 0);
-
-        saveUsed(0);
+        ecuDataStore.write(DATA_MAP.FUEL_GALLONS_REMAINING, anchorGallonsRemaining);
 
         console.info("[FUEL] Refuel detected — counters reset", {
           previousPercent: stoppedBaselinePct,
@@ -654,6 +765,7 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
         });
 
         stoppedBaselinePct = stableFuelPct;
+        refuelBaselinePercent = stableFuelPct;
         saveFuelPctNow(stableFuelPct);
       } else if (stableFuelPct !== null) {
         maybeSaveFuelPct(stableFuelPct);
@@ -662,15 +774,20 @@ export default function fuelLevelUpdater(ecuDataStore, markFresh) {
     }
 
     lastFuelPct = percent;
+    anchorGallonsRemaining = percent / 100 * TANK_CAPACITY_GALLONS;
+    anchorGallonsUsed = gallonsSinceRefuel;
 
     ecuDataStore.write(DATA_MAP.FUEL_LEVEL, percent);
+    ecuDataStore.write(DATA_MAP.FUEL_GALLONS_REMAINING, anchorGallonsRemaining);
     ecuDataStore.write(DATA_MAP.ADC1, raw);
 
-    markFresh();
     } finally {
       sampleInFlight = false;
     }
   }, SAMPLE_MS);
 
-  return () => clearInterval(interval);
+  return () => {
+    clearInterval(interval);
+    saveFuelState();
+  };
 }

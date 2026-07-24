@@ -63,10 +63,11 @@ export default (carSettings, canChannel) => {
 
 		if (stopFuelLevelUpdater) stopFuelLevelUpdater();
 			if (process.env.STARTUP_MODE !== "replay_logs") {
-			stopFuelLevelUpdater = fuelLevelUpdater(ecuDataStore, () => {
-	  // intentionally empty
-	  // fuel updates must NOT mark CAN as fresh
-	});
+			stopFuelLevelUpdater = fuelLevelUpdater(
+				ecuDataStore,
+				() => lastCanUpdateTime !== 0 &&
+					performance.now() - lastCanUpdateTime <= STALE_CAN_MS
+			);
 			} else {
 				replayFuelState = seedPersistedFuelState(ecuDataStore);
 			}
@@ -123,10 +124,15 @@ export default (carSettings, canChannel) => {
 		) {
 			const replayGallonsUsed = Math.max(0, Number(data) || 0);
 			const startingPercent = Number(replayFuelState.fuelPercent);
-			if (Number.isFinite(startingPercent)) {
-				const startingGallons =
-					Math.max(0, Math.min(100, startingPercent)) / 100 *
-					TANK_CAPACITY_GALLONS;
+			const persistedRemaining = Number(replayFuelState.gallonsRemaining);
+			const startingGallons = Number.isFinite(persistedRemaining) &&
+				persistedRemaining >= 0
+				? persistedRemaining
+				: Number.isFinite(startingPercent)
+					? Math.max(0, Math.min(100, startingPercent)) / 100 *
+						TANK_CAPACITY_GALLONS
+					: null;
+			if (startingGallons !== null) {
 				const remainingGallons = Math.max(
 					0,
 					startingGallons - replayGallonsUsed
@@ -134,6 +140,10 @@ export default (carSettings, canChannel) => {
 				ecuDataStore.write(
 					DATA_MAP.FUEL_LEVEL,
 					remainingGallons / TANK_CAPACITY_GALLONS * 100
+				);
+				ecuDataStore.write(
+					DATA_MAP.FUEL_GALLONS_REMAINING,
+					remainingGallons
 				);
 			}
 			ecuDataStore.write(

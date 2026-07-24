@@ -1,6 +1,9 @@
 import { DATA_MAP } from "../dataKeys.js";
 import { computeFuelGPH } from "../fuelFlow.js";
 import { vehicleTimeMs } from "./canTime.js";
+import { isRealVehicleCan } from "../vehiclePersistence.js";
+import path from "path";
+import { fileURLToPath } from "url";
 
 
 
@@ -10,7 +13,12 @@ let lastVssTime = null;
 let currentCanTime = null;
 
 import fs from "fs";
-const HISTORY_FILE = "./data/history.json";
+const PROJECT_ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../.."
+);
+const HISTORY_FILE = path.join(PROJECT_ROOT, "data/history.json");
+const HISTORY_TEMP_FILE = `${HISTORY_FILE}.tmp`;
 const HISTORY_SAVE_MS = 60_000;
 let lastHistorySaveTime = Date.now();
 let historySaveInFlight = false;
@@ -93,16 +101,19 @@ const MS_CAN_MAP = {
   // 0x5F2 : MAP, MAT, CLT
   // -------------------------------------------------------
   0x5F2: (data) => {
+    const rawBaro = readS16(data, 0);
     const rawMap = readS16(data, 2);
     const rawMat = readS16(data, 4);
     const rawClt = readS16(data, 6);
 
+    const baro = (rawBaro > 0 && rawBaro < 2000) ? rawBaro / 10 : 0;
     const map = (rawMap > 0 && rawMap < 10000) ? rawMap / 10 : 0;
     const mat = (rawMat > 0 && rawMat < 10000) ? rawMat / 10 : 0;
     const clt = (rawClt > 0 && rawClt < 10000) ? Math.floor(rawClt / 10) : 0;
 
     return [
       { id: DATA_MAP.MAP, data: map },
+      { id: DATA_MAP.BARO, data: baro },
       { id: DATA_MAP.CTS, data: clt },
       { id: DATA_MAP.MAT, data: mat },
     ];
@@ -283,8 +294,7 @@ const MS_CAN_MAP = {
   // ---- persist history without blocking CAN processing ----
   const historySaveNow = Date.now();
   if (
-    process.env.TYPE !== "development" &&
-    process.env.STARTUP_MODE !== "replay_logs" &&
+    isRealVehicleCan() &&
     !historySaveInFlight &&
     historySaveNow - lastHistorySaveTime >= HISTORY_SAVE_MS
   ) {
@@ -292,9 +302,16 @@ const MS_CAN_MAP = {
     lastHistorySaveTime = historySaveNow;
     const historySnapshot = JSON.stringify(historical, null, 2);
 
-    fs.writeFile(HISTORY_FILE, historySnapshot, (error) => {
-      historySaveInFlight = false;
-      if (error) console.error("History save error:", error);
+    fs.writeFile(HISTORY_TEMP_FILE, historySnapshot, (writeError) => {
+      if (writeError) {
+        historySaveInFlight = false;
+        console.error("History save error:", writeError);
+        return;
+      }
+      fs.rename(HISTORY_TEMP_FILE, HISTORY_FILE, (renameError) => {
+        historySaveInFlight = false;
+        if (renameError) console.error("History save error:", renameError);
+      });
     });
   }
 

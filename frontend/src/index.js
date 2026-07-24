@@ -22,7 +22,17 @@ import sensors from "./js/sensors";
 import fuel from "./js/fuel";
 import canIndicator from "./js/canIndicator";
 import engineDetails from "./js/engineDetails";
-import { TANK_CAPACITY_GALLONS } from "./js/common/vehicleConfig";
+import {
+  ATMOSPHERIC_PRESSURE_KPA,
+  KPA_TO_PSI,
+  TANK_CAPACITY_GALLONS
+} from "./js/common/vehicleConfig";
+import { initializeNativeRadialGauges } from "./js/common/nativeRadialGauge";
+import { initializeNativeLinearGauges } from "./js/common/nativeLinearGauge";
+import {
+  initializeStarfield,
+  setStarfieldVehicleSpeed
+} from "./js/starfield";
 
 // --------------------------------------------------
 // WORKER
@@ -53,11 +63,30 @@ let lastPacketTime = Date.now();
 const AUTO_REFRESH_TIMEOUT = 1000;
 const WATCHDOG_INTERVAL = 250;
 const DRIVE_SUMMARY_CAN_SILENCE = 2000;
-const BOOST_THRESHOLD_KPA = 100;
-const KPA_TO_PSI = 0.145038;
 let summaryVisible = false;
 let driveSession = null;
 let latestVehicleTime = null;
+let boostModeBannerTimer = null;
+
+function initializeBoostModeBanner() {
+  const banner = document.getElementById("boost-mode-banner");
+  if (!banner) return;
+  window.addEventListener("boost-mode-change", (event) => {
+    const highBoostMode = Boolean(event.detail?.high);
+    banner.textContent = highBoostMode ? "HIGH BOOST" : "LOW BOOST";
+    banner.classList.toggle("high-boost-banner", highBoostMode);
+    banner.classList.toggle("low-boost-banner", !highBoostMode);
+    banner.classList.remove("visible");
+    // Force a fresh transition when modes change again before the prior
+    // banner has completely faded.
+    void banner.offsetWidth;
+    banner.classList.add("visible");
+    if (boostModeBannerTimer) clearTimeout(boostModeBannerTimer);
+    boostModeBannerTimer = setTimeout(() => {
+      banner.classList.remove("visible");
+    }, 1800);
+  });
+}
 
 function numberValue(dataKey) {
   const value = Number(updateData[dataKey.id]);
@@ -173,14 +202,21 @@ function recordDriveSample() {
   driveSession.endOdometer = numberValue(DATA_MAP.CURRENT_ODOMETER);
   driveSession.maxRpm = Math.max(driveSession.maxRpm, rpm);
   const mapKpa = numberValue(DATA_MAP.MAP);
+  const reportedBaroKpa = numberValue(DATA_MAP.BARO);
+  const baroKpa = reportedBaroKpa > 0
+    ? reportedBaroKpa
+    : ATMOSPHERIC_PRESSURE_KPA;
   driveSession.maxMap = Math.max(driveSession.maxMap, mapKpa);
-  const boostPsi = Math.max(0, (mapKpa - BOOST_THRESHOLD_KPA) * KPA_TO_PSI);
+  const boostPsi = Math.max(
+    0,
+    (mapKpa - baroKpa) * KPA_TO_PSI
+  );
   driveSession.maxBoostPsi = Math.max(driveSession.maxBoostPsi, boostPsi);
   if (
     continuousSample &&
     vehicleDelta > 0 &&
     rpm > 0 &&
-    mapKpa > BOOST_THRESHOLD_KPA
+    mapKpa > baroKpa
   ) {
     driveSession.boostMilliseconds += vehicleDelta;
   }
@@ -270,13 +306,21 @@ function showDriveSummary() {
   const fuelPercent = numberValue(DATA_MAP.FUEL_LEVEL);
   const senderConnected = numberValue(DATA_MAP.FUEL_SENDER_CONNECTED) === 1;
   const tankFuelUsed = numberValue(DATA_MAP.FUEL_GALLONS_SINCE_REFILL);
+  const backendRemainingValue = Number(
+    updateData[DATA_MAP.FUEL_GALLONS_REMAINING.id]
+  );
+  const backendRemainingFuel = Number.isFinite(backendRemainingValue)
+    ? backendRemainingValue
+    : -1;
   const fallbackTankFuelUsed = tankFuelUsed > 0 ? tankFuelUsed : driveSession.fuelUsed;
-  const remainingFuel = senderConnected && Number.isFinite(fuelPercent) && fuelPercent >= 0
-    ? Math.max(
+  const remainingFuel = backendRemainingFuel >= 0
+    ? Math.min(TANK_CAPACITY_GALLONS, backendRemainingFuel)
+    : senderConnected && Number.isFinite(fuelPercent) && fuelPercent >= 0
+      ? Math.max(
         0,
         Math.min(TANK_CAPACITY_GALLONS, fuelPercent / 100 * TANK_CAPACITY_GALLONS)
       )
-    : Math.max(
+      : Math.max(
         0,
         TANK_CAPACITY_GALLONS - fallbackTankFuelUsed
       );
@@ -503,7 +547,14 @@ function setElementsOpacity(ids, opacity) {
 
 function setDashboardOpacity(opacity) {
   setElementsOpacity(
-    ["left", "right", "rpmbar", "main_container1", "main_container2"],
+    [
+      "left",
+      "right",
+      "rpmbar",
+      "boost-combo-gauge",
+      "main_container1",
+      "main_container2"
+    ],
     opacity
   );
   setElementsOpacity(["galdisplay", "mpgdisplay", "odometer"], opacity);
@@ -553,11 +604,19 @@ const renderDashboard = () => {
     counter++;
 
     const rpm = updateData[DATA_MAP.RPM.id];
-    tachometer.update(rpm, isCommError);
+    setStarfieldVehicleSpeed(updateData[DATA_MAP.SPEEDO.id]);
+    tachometer.update(
+      rpm,
+      updateData[DATA_MAP.BOOST_TARGET.id],
+      isCommError
+    );
 
     try {
       map.update(
         updateData[DATA_MAP.MAP.id],
+        updateData[DATA_MAP.BOOST_TARGET.id],
+        updateData[DATA_MAP.BARO.id],
+        updateData[DATA_MAP.BOOST_CONTROLLER_DUTY.id],
         isCommError
       );
     } catch {}
@@ -583,6 +642,7 @@ const renderDashboard = () => {
           updateData[DATA_MAP.FUEL_LEVEL.id],
           updateData[DATA_MAP.FUEL_GALLONS_USED.id],
           updateData[DATA_MAP.FUEL_GALLONS_SINCE_REFILL.id],
+          updateData[DATA_MAP.FUEL_GALLONS_REMAINING.id],
           updateData[DATA_MAP.AVERAGE_MPG.id],
           updateData[DATA_MAP.HISTORICAL_MPG.id],
           updateData[DATA_MAP.FUEL_SENDER_CONNECTED.id],
@@ -657,7 +717,11 @@ const scheduleRender = () => {
 // INIT
 // --------------------------------------------------
 const initializeApp = () => {
+  initializeStarfield();
+  initializeBoostModeBanner();
   dataWorker.postMessage({ msg: "start" });
+  initializeNativeRadialGauges();
+  initializeNativeLinearGauges();
   reinitGauges();
   checkCommunications();
   setInterval(checkCommunications, WATCHDOG_INTERVAL);
