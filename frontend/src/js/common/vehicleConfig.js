@@ -1,0 +1,9 @@
+export {
+  ATMOSPHERIC_PRESSURE_KPA,
+  FULL_BOOST_MAP_KPA,
+  KPA_TO_PSI,
+  TACH_MAX_RPM,
+  TACH_MIN_RPM,
+  TACH_REDLINE_RPM,
+  TANK_CAPACITY_GALLONS
+} from "../../../../settings/vehicleConfig.js";
