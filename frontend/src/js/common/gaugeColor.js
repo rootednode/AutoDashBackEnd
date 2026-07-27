@@ -1,10 +1,13 @@
 const DEFAULT_GAUGE_COLOR = "rgba(0, 250, 0, .75)";
-const PEAK_NEEDLE_COLOR = "rgba(0, 255, 255, .6)";
-const PEAK_WINDOW_MS = 10_000;
 const peakByGauge = new WeakMap();
-const peakSamplesByGauge = new WeakMap();
 const peakListenerGauges = new WeakSet();
-const dimmedHighlightGauges = new WeakSet();
+const registeredGauges = new Set();
+
+function peakNeedleColor() {
+  return getComputedStyle(document.documentElement)
+    .getPropertyValue("--gauge-peak-color")
+    .trim() || "#3388ff";
+}
 
 function normalizedGaugeValue(gauge, value) {
   const minValue = Number(gauge.options.minValue);
@@ -38,7 +41,7 @@ function drawLinearPeakNeedle(gauge, peakValue) {
 
   context.save();
   context.beginPath();
-  context.strokeStyle = PEAK_NEEDLE_COLOR;
+  context.strokeStyle = peakNeedleColor();
   context.lineWidth = Math.max(1, dimensions.pixelRatio || 1);
   context.shadowBlur = 0;
 
@@ -75,7 +78,7 @@ function drawRadialPeakNeedle(gauge, peakValue) {
   context.beginPath();
   context.moveTo(0, radius * 0.68);
   context.lineTo(0, radius * 0.86);
-  context.strokeStyle = PEAK_NEEDLE_COLOR;
+  context.strokeStyle = peakNeedleColor();
   context.lineWidth = Math.max(1, gauge.canvas.constructor.pixelRatio || 1);
   context.shadowBlur = 0;
   context.stroke();
@@ -100,7 +103,9 @@ function drawRadialCurrentMarker(gauge) {
   context.beginPath();
   context.moveTo(0, radius * 0.68);
   context.lineTo(0, radius * 0.86);
-  context.strokeStyle = "#ffffff";
+  context.strokeStyle = getComputedStyle(document.body)
+    .getPropertyValue("--dash-value")
+    .trim() || "#ffffff";
   context.lineWidth = Math.max(2, gauge.canvas.constructor.pixelRatio || 1);
   context.shadowBlur = 0;
   context.stroke();
@@ -136,28 +141,25 @@ function ensurePeakNeedleListener(gauge) {
 }
 
 function recordPeak(gauge, value) {
+  registeredGauges.add(gauge);
   ensurePeakNeedleListener(gauge);
   if (!Number.isFinite(value)) return false;
 
-  const now = performance.now();
-  const cutoff = now - PEAK_WINDOW_MS;
-  let samples = peakSamplesByGauge.get(gauge);
-  if (!samples) {
-    samples = [];
-    peakSamplesByGauge.set(gauge, samples);
-  }
-
-  samples.push({ time: now, value });
-  while (samples.length > 0 && samples[0].time < cutoff) samples.shift();
-
   const previousPeak = peakByGauge.get(gauge);
-  const rollingPeak = samples.reduce(
-    (highest, sample) => Math.max(highest, sample.value),
-    -Infinity
-  );
-  peakByGauge.set(gauge, rollingPeak);
+  const heldPeak = Number.isFinite(previousPeak)
+    ? Math.max(previousPeak, value)
+    : value;
+  peakByGauge.set(gauge, heldPeak);
 
-  return previousPeak !== rollingPeak;
+  return previousPeak !== heldPeak;
+}
+
+export function clearGaugePeaks() {
+  registeredGauges.forEach((gauge) => {
+    peakByGauge.delete(gauge);
+    if (typeof gauge.setPeakValue === "function") gauge.setPeakValue(null);
+    if (typeof gauge.draw === "function") gauge.draw();
+  });
 }
 
 function configuredHighlightRanges(gauge) {
@@ -173,6 +175,15 @@ function configuredHighlightRanges(gauge) {
 }
 
 function parseRgba(color) {
+  const hexMatch = color.match(/^#([0-9a-f]{6})$/i);
+  if (hexMatch) {
+    return {
+      red: parseInt(hexMatch[1].slice(0, 2), 16),
+      green: parseInt(hexMatch[1].slice(2, 4), 16),
+      blue: parseInt(hexMatch[1].slice(4, 6), 16),
+      alpha: 1
+    };
+  }
   const match = color.match(
     /^rgba?\(\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)(?:\s*,\s*(\d*(?:\.\d+)?))?\s*\)$/i
   );
@@ -196,17 +207,18 @@ function emphasizeColor(color) {
   return colorWithAlpha(color, 0.85);
 }
 
-function dimStaticHighlights(gauge) {
-  if (dimmedHighlightGauges.has(gauge)) return false;
-  dimmedHighlightGauges.add(gauge);
-
+export function dimGaugeHighlights(gauge) {
   const ranges = configuredHighlightRanges(gauge);
   if (ranges.length === 0) return false;
-  gauge.options.highlights = ranges.map((range) => ({
+  const dimmedRanges = ranges.map((range) => ({
     ...range,
     color: colorWithAlpha(range.color, 0.28)
   }));
-  return true;
+  const changed = dimmedRanges.some(
+    (range, index) => range.color !== ranges[index].color
+  );
+  if (changed) gauge.options.highlights = dimmedRanges;
+  return changed;
 }
 
 function blendColors(fromColor, toColor, ratio) {
@@ -281,7 +293,7 @@ export function setGaugeReading(
 
   let needsDraw = false;
 
-  if (dimStaticHighlights(gauge)) needsDraw = true;
+  if (dimGaugeHighlights(gauge)) needsDraw = true;
 
   if (
     valueText !== undefined &&
@@ -310,9 +322,14 @@ export function setGaugeReading(
     if (Number.isFinite(maxValue)) displayValue = Math.min(maxValue, displayValue);
   }
 
-  if (Number.isFinite(displayValue) && recordPeak(gauge, displayValue)) {
-    // A previous high may have just aged out even when the live value did not
-    // change, so force a redraw to move the cyan rolling-maximum marker.
+  const readingAvailable = valueText === undefined ||
+    !["—", "--"].includes(String(valueText));
+  if (
+    readingAvailable &&
+    Number.isFinite(displayValue) &&
+    recordPeak(gauge, displayValue)
+  ) {
+    // Force a redraw whenever the held maximum advances.
     needsDraw = true;
   }
 

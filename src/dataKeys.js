@@ -92,6 +92,7 @@ export const DATA_MAP = {
   // MegaSquirt CAN realtime broadcast group 17 (base ID 0x5F0 + 17 = 0x601)
   BOOST_TARGET: { id: keygen(), byteType: TYPES.FLOAT }, // absolute kPa
   BOOST_CONTROLLER_DUTY: { id: keygen(), byteType: TYPES.UINT8 }, // 0-100%
+  AFR_TARGET: { id: keygen(), byteType: TYPES.FLOAT },
 };
 Object.freeze(DATA_MAP);
 

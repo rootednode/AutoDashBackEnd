@@ -20,19 +20,22 @@ const LOG_EVERY_N_UPDATES = 1;
 let updateCounter = 0;
 let lastDebugSignature = "";
 const missingIndicatorsLogged = new Set();
-const WARNING_MEMORY_MS = 5_000;
 const OIL_WARNING_DEBOUNCE_MS = 750;
 const FUEL_WARNING_DEBOUNCE_MS = 750;
 const AFR_WARNING_DEBOUNCE_MS = 500;
 const ENGINE_RUNNING_RPM = 500;
+const ENGINE_WARNING_GRACE_MS = 2_000;
 const MIN_FUEL_DIFFERENTIAL_PSI = 35;
-let warningLatchedUntil = 0;
+let sessionWarningLatched = false;
 let lowOilSince = null;
 let lowFuelPressureSince = null;
 let leanSince = null;
 let rememberedWarningLabel = "WARN";
 let activeEventCodes = new Set();
 let warningHistory = [];
+let overheatAlertActive = false;
+let oilPressureAlertActive = false;
+let engineReadySince = null;
 
 // -------------------------------------------------------------
 // INDICATOR HELPERS
@@ -88,6 +91,12 @@ function setAfrWarning(on) {
 function setWarningLabel(label) {
   const element = document.getElementById("warning-label");
   if (element) element.textContent = label || "WARN";
+}
+
+function showEngineAlert(message) {
+  window.dispatchEvent(new CustomEvent("engine-alert", {
+    detail: { message }
+  }));
 }
 
 function requiredOilPressure(rpm) {
@@ -190,10 +199,12 @@ function resetIndicators(reason = "reset") {
   setIndicator("ase", false);
   setIndicator("engine_run", false);
   setIndicator("idle", false);
-  setIndicator("overheat", false);
   setOilPressureWarning(false);
   setAfrWarning(false);
   setWarningLabel("WARN");
+  overheatAlertActive = false;
+  oilPressureAlertActive = false;
+  engineReadySince = null;
 }
 
 function debugElementCheck() {
@@ -206,7 +217,6 @@ function debugElementCheck() {
     "ase",
     "engine_run",
     "idle",
-    "overheat",
   ];
 
   const found = {};
@@ -291,7 +301,7 @@ export default {
     }
 
     debugElementCheck();
-    warningLatchedUntil = 0;
+    sessionWarningLatched = false;
     lowOilSince = null;
     lowFuelPressureSince = null;
     leanSince = null;
@@ -303,10 +313,24 @@ export default {
   startSession: function () {
     warningHistory = [];
     activeEventCodes = new Set();
+    sessionWarningLatched = false;
+    rememberedWarningLabel = "WARN";
+    engineReadySince = null;
+    setIndicator("warning", false);
+    setWarningLabel("WARN");
   },
 
   getSessionSummary: function () {
-    return warningHistory.map((event) => ({ ...event }));
+    const reasons = new Map();
+    warningHistory.forEach((event) => {
+      const existing = reasons.get(event.code);
+      reasons.set(event.code, {
+        ...event,
+        count: (existing?.count || 0) + 1,
+        firstTimestamp: existing?.firstTimestamp || event.timestamp
+      });
+    });
+    return Array.from(reasons.values());
   },
 
   // Expected order:
@@ -360,6 +384,10 @@ export default {
       }
 
       resetIndicators("noComm or missing engine");
+      if (sessionWarningLatched) {
+        setIndicator("warning", true);
+        setWarningLabel(rememberedWarningLabel);
+      }
       return;
     }
 
@@ -378,6 +406,7 @@ export default {
     const flags = {
       // ENGINE byte
       ready:    hasBit(bytes.engine, ENGINE.READY),
+      crank:    hasBit(bytes.engine, ENGINE.CRANK),
       ase:      hasBit(bytes.engine, ENGINE.ASE),
       warmup:   hasBit(bytes.engine, ENGINE.WUE),
       tpsAccel: hasBit(bytes.engine, ENGINE.TPS_ACCEL),
@@ -426,9 +455,35 @@ export default {
     const speed = Number(speedValue);
     const timestamp = Number(timestampValue);
     const now = performance.now();
-    const oilWarning = oilPressureWarning(rpm, oilPressure, now);
-    const fuelWarning = fuelPressureWarning(rpm, mapKpa, fuelPressure, now);
-    const leanWarning = leanUnderLoadWarning(rpm, mapKpa, tps, afr, now);
+    const engineRunning = flags.ready && !flags.crank && rpm >= ENGINE_RUNNING_RPM;
+    if (!engineRunning) {
+      engineReadySince = null;
+    } else if (engineReadySince === null) {
+      engineReadySince = now;
+    }
+    const engineMonitoringReady = engineReadySince !== null &&
+      now - engineReadySince >= ENGINE_WARNING_GRACE_MS;
+    const oilWarning = engineMonitoringReady
+      ? oilPressureWarning(rpm, oilPressure, now)
+      : oilPressureWarning(Number.NaN, Number.NaN, now);
+    const overheatWarning = flags.egtWarn || flags.egtSd;
+    if (overheatWarning && !overheatAlertActive) {
+      showEngineAlert("OVERHEAT");
+    }
+    overheatAlertActive = overheatWarning;
+    if (oilWarning && !oilPressureAlertActive) {
+      const requiredPressure = requiredOilPressure(rpm);
+      showEngineAlert(
+        `LOW OIL ${oilPressure.toFixed(0)} PSI / ${requiredPressure.toFixed(0)} MIN`
+      );
+    }
+    oilPressureAlertActive = oilWarning;
+    const fuelWarning = engineMonitoringReady
+      ? fuelPressureWarning(rpm, mapKpa, fuelPressure, now)
+      : fuelPressureWarning(Number.NaN, Number.NaN, Number.NaN, now);
+    const leanWarning = engineMonitoringReady
+      ? leanUnderLoadWarning(rpm, mapKpa, tps, afr, now)
+      : leanUnderLoadWarning(0, 0, 0, Number.NaN, now);
     const afrWarningActive = leanWarning.active || flags.afrWarn || flags.afrSd;
     const warnings = [];
     if (oilWarning) {
@@ -452,13 +507,13 @@ export default {
         detail: `${afr.toFixed(1)} AFR`
       });
     }
-    if (!Number.isFinite(fuelPressure)) {
+    if (engineMonitoringReady && !Number.isFinite(fuelPressure)) {
       warnings.push({ code: "fuel-sensor", label: "SENSOR", detail: "FUEL PSI" });
     }
-    if (!Number.isFinite(oilTemperature)) {
+    if (engineMonitoringReady && !Number.isFinite(oilTemperature)) {
       warnings.push({ code: "oil-temp-sensor", label: "SENSOR", detail: "OIL TEMP" });
     }
-    if (!Number.isFinite(oilPressure)) {
+    if (engineMonitoringReady && !Number.isFinite(oilPressure)) {
       warnings.push({ code: "oil-psi-sensor", label: "SENSOR", detail: "OIL PSI" });
     }
     const ecuDetail = warning ? ecuWarningDetail(flags) : null;
@@ -468,17 +523,16 @@ export default {
     const activeWarning = warnings.length > 0;
 
     if (activeWarning) {
-      warningLatchedUntil = now + WARNING_MEMORY_MS;
+      sessionWarningLatched = true;
       rememberedWarningLabel = afrWarningActive ? "AFR!" : warnings[0].label;
     }
-    const rememberedWarning = activeWarning || now < warningLatchedUntil;
+    const rememberedWarning = sessionWarningLatched;
 
     const indicatorState = {
       engine_run: flags.ready,
       ase: flags.ase,
       cold: flags.warmup,
       idle: flags.clIdle,
-      overheat: flags.egtSd || flags.afrSd,
       ac: flags.ac,
       warning: rememberedWarning,
     };
@@ -506,7 +560,6 @@ export default {
     setIndicator("ase", indicatorState.ase);
     setIndicator("cold", indicatorState.cold);
     setIndicator("idle", indicatorState.idle);
-    setIndicator("overheat", indicatorState.overheat);
     setIndicator("ac", indicatorState.ac);
     setIndicator("warning", indicatorState.warning);
     setWarningLabel(rememberedWarning ? rememberedWarningLabel : "WARN");

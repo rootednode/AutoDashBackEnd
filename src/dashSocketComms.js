@@ -86,6 +86,39 @@ class DashSocketComms {
     }
   }
 
+  controllerStateUpdate(state) {
+    const message = JSON.stringify({ type: "controller_state", state });
+    for (const ws of this.sockets) {
+      try {
+        ws.send(message, false);
+      } catch (error) {
+        this.sockets.delete(ws);
+      }
+    }
+  }
+
+  controllerEvent(event, detail = {}) {
+    const message = JSON.stringify({
+      type: "controller_event",
+      event,
+      detail
+    });
+    for (const ws of this.sockets) {
+      try {
+        ws.send(message, false);
+      } catch (error) {
+        this.sockets.delete(ws);
+      }
+    }
+  }
+
+  health() {
+    return {
+      started: this.started,
+      connectedDashboards: this.sockets.size
+    };
+  }
+
   notifyError() {
     this.uWSApp.publish('error', 'onno');
   }

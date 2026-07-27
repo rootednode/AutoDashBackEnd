@@ -38,6 +38,18 @@ function parseHighlights(value) {
   }
 }
 
+function colorRoleForValue(highlights, value) {
+  const matchingRange = highlights.find(
+    (range, index) =>
+      value >= Number(range.from) &&
+      (value < Number(range.to) ||
+        (index === highlights.length - 1 && value <= Number(range.to)))
+  );
+  return ["low", "normal", "medium", "high"].includes(matchingRange?.role)
+    ? matchingRange.role
+    : "";
+}
+
 class NativeRadialGauge {
   constructor(host) {
     const data = host.dataset;
@@ -116,6 +128,10 @@ class NativeRadialGauge {
 
   draw() {
     const value = numeric(this.options.value, this.options.minValue);
+    this.options.renderTo.dataset.gaugeColorRole = colorRoleForValue(
+      this.options.highlights,
+      value
+    );
     (this.listeners.get("beforeNeedle") || []).forEach((listener) => {
       listener.call(this);
     });
@@ -145,7 +161,7 @@ class NativeRadialGauge {
   }
 
   setPeakValue(value) {
-    this.peakValue = Number(value);
+    this.peakValue = value === null ? null : Number(value);
   }
 
   on(eventName, listener) {

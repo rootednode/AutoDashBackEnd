@@ -331,6 +331,10 @@ let refuelBaselinePercent = persistedFuelState.refuelBaselinePercent;
 
 let lastTime = performance.now();
 
+export function resetTripFuelUsed() {
+  tripGallonsUsed = 0;
+}
+
 function estimatedGallonsRemaining() {
   if (!Number.isFinite(anchorGallonsRemaining)) return -1;
   const burnedSinceAnchor = Math.max(0, gallonsSinceRefuel - anchorGallonsUsed);

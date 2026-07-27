@@ -77,6 +77,8 @@ export default class DataStore {
         return this.buffer.readFloatBE(packetEntry.byteOffset);
       case TYPES.UINT8:
         return this.buffer.readUInt8(packetEntry.byteOffset);
+      case TYPES.BITFIELD:
+        return this.buffer.readUInt8(packetEntry.byteOffset);
       case TYPES.UINT16:
         return this.buffer.readUInt16BE(packetEntry.byteOffset);
       case TYPES.UINT32:

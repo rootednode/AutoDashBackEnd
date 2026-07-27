@@ -49,6 +49,17 @@ let tripGallons = 0;
 
 let lastValidMpg = 0;
 
+export function resetCanTripMpg() {
+  tripMiles = 0;
+  tripGallons = 0;
+  averageMPG = 0;
+  lastValidMpg = 0;
+}
+
+export function resetCanTrip() {
+  resetCanTripMpg();
+}
+
 // SAFE helper for reading signed 16-bit values
 function readS16(data, offset) {
   return data.readInt16BE(offset);
@@ -86,6 +97,8 @@ const MS_CAN_MAP = {
   0x5F1: (data) => {
     const rawAdv = readS16(data, 0);
     const adv = (rawAdv > 0 && rawAdv < 12000) ? rawAdv / 10 : 0;
+    const rawAfrTarget = data.readUInt8(4);
+    const afrTarget = rawAfrTarget > 0 ? rawAfrTarget / 10 : 0;
 
     //const engine = readS16(data, 3);
 		const engine = data.readUInt8(3);
@@ -94,6 +107,7 @@ const MS_CAN_MAP = {
     return [
       { id: DATA_MAP.ADV, data: adv },
       { id: DATA_MAP.ENGINE, data: engine },
+      { id: DATA_MAP.AFR_TARGET, data: afrTarget },
     ];
   },
 

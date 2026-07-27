@@ -37,9 +37,11 @@ export default {
       "boost-value",
       "boost-duty-fill",
       "boost-duty-value",
+      "boost-gradient-low",
       "boost-gradient-green",
       "boost-gradient-target",
       "boost-gradient-over",
+      "boost-gradient-high",
       "boost-scale-100",
       "boost-scale-80",
       "boost-scale-60",
@@ -174,6 +176,13 @@ export default {
       this.svg["boost-duty-value"].textContent = hasDuty
         ? `${Math.round(boundedDuty)}%`
         : "—%";
+    }
+  },
+
+  clearPeak: function () {
+    this.peakBoost = null;
+    if (this.svg?.["boost-peak-marker"]) {
+      this.svg["boost-peak-marker"].style.display = "none";
     }
   },
 

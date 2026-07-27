@@ -1,6 +1,12 @@
 import { performance } from "perf_hooks";
-import msDecoder from "./CAN/msDecoder.js";
-import fuelLevelUpdater, { seedPersistedFuelState } from "./fuelLevelReader.js";
+import msDecoder, {
+	resetCanTrip,
+	resetCanTripMpg
+} from "./CAN/msDecoder.js";
+import fuelLevelUpdater, {
+	resetTripFuelUsed,
+	seedPersistedFuelState
+} from "./fuelLevelReader.js";
 import { computeEcoBar } from "./ecoBar.js";
 import { DATA_MAP, WARNING_KEYS } from "./dataKeys.js";
 import DataStore from "./DataStore.js";
@@ -234,6 +240,44 @@ export default (carSettings, canChannel) => {
 		},
 
 		readValue: (dataKey) => ecuDataStore.read(dataKey),
+
+		canStatus: () => {
+			const ageMs = lastCanUpdateTime === 0
+				? null
+				: Math.max(0, performance.now() - lastCanUpdateTime);
+			return {
+				fresh: ageMs !== null && ageMs <= STALE_CAN_MS,
+				lastUpdateAgeMs: ageMs === null ? null : Math.round(ageMs)
+			};
+		},
+
+		resetTrip: () => {
+			const currentOdometer =
+				ecuDataStore.read(DATA_MAP.CURRENT_ODOMETER);
+			baseOdometerReading = currentOdometer;
+			traveled = 0;
+			resetCanTrip();
+			resetTripFuelUsed();
+			ecuDataStore.write(DATA_MAP.TRIP_ODOMETER, 0);
+			ecuDataStore.write(DATA_MAP.FUEL_GALLONS_USED, 0);
+			ecuDataStore.write(DATA_MAP.AVERAGE_MPG, 0);
+			return {
+				odometer: currentOdometer,
+				tripOdometer: 0,
+				tripFuelUsed: 0,
+				averageMpg: 0
+			};
+		},
+
+		resetTripMpg: () => {
+			resetCanTripMpg();
+			ecuDataStore.write(DATA_MAP.AVERAGE_MPG, 0);
+			return {
+				averageMpg: 0,
+				tripOdometer: ecuDataStore.read(DATA_MAP.TRIP_ODOMETER),
+				tripFuelUsed: ecuDataStore.read(DATA_MAP.FUEL_GALLONS_USED)
+			};
+		},
 
 		persistantData: () => {
 			return {

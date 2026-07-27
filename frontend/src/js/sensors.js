@@ -5,10 +5,13 @@ function setSensorFault(gauge, fault) {
   if (container) container.classList.toggle("sensor-fault", fault);
 
   if (fault && gauge) {
+    const faultColor = getComputedStyle(document.body)
+      .getPropertyValue("--dash-medium-color")
+      .trim() || "#ffb020";
     setGaugeReading(gauge, {
       value: Number(gauge.options.minValue) || 0,
       valueText: "—",
-      colorBarProgress: "rgba(255, 176, 0, .85)"
+      colorBarProgress: faultColor
     });
   }
 }

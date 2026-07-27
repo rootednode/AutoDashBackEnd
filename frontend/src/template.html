@@ -10,7 +10,8 @@
 
   <canvas id="starfield-background" class="starfield-background" aria-hidden="true"></canvas>
   <div id="boost-mode-banner" class="boost-mode-banner" role="status" aria-live="polite"></div>
-  <div id="full" style="width: 100%; height: 100%; ">
+  <div id="engine-alert-banner" class="boost-mode-banner engine-alert-banner" role="alert" aria-live="assertive"></div>
+  <div id="full" data-dashboard-page="main" data-dashboard-label="Main Dashboard" data-dashboard-icon="layout-dashboard" style="width: 100%; height: 100%; ">
 
       <div id="left" style="width: 150px; height: 100%; float: left;">
             <div id="fuelpsi_container" style="width: 150px; height: 150px; float: left;">
@@ -29,9 +30,9 @@
 										data-start-angle="50"
 										data-ticks-angle="260"
 										data-highlights='[
-											{"from":0,"to":30,"color":"rgba(250,0,0,.75)"},
-											{"from":30,"to":55,"color":"rgba(0,250,0,.75)"},
-											{"from":55,"to":70,"color":"rgba(250,0,0,.75)"}
+											{"from":0,"to":30,"role":"low","color":"rgba(250,0,0,.75)"},
+											{"from":30,"to":55,"role":"normal","color":"rgba(0,250,0,.75)"},
+											{"from":55,"to":70,"role":"high","color":"rgba(250,0,0,.75)"}
 										]'
 										data-highlights-width="6"
 										data-bar-progress="true"
@@ -84,9 +85,9 @@
 										data-start-angle="50"
 										data-ticks-angle="260"
 										data-highlights='[
-											{"from":0,"to":10,"color":"rgba(250,0,0,.75)"},
-											{"from":10,"to":70,"color":"rgba(0,250,0,.75)"},
-											{"from":70,"to":100,"color":"rgba(250,0,0,.75)"}
+											{"from":0,"to":10,"role":"low","color":"rgba(250,0,0,.75)"},
+											{"from":10,"to":70,"role":"normal","color":"rgba(0,250,0,.75)"},
+											{"from":70,"to":100,"role":"high","color":"rgba(250,0,0,.75)"}
 										]'
 										data-highlights-width="6"
 										data-bar-progress="true"
@@ -140,9 +141,9 @@
 										data-start-angle="50"
 										data-ticks-angle="260"
 										data-highlights='[
-											{"from":10,"to":12,"color":"rgba(250,0,0,.75)"},
-											{"from":12,"to":15,"color":"rgba(0,250,0,.75)"},
-											{"from":15,"to":18,"color":"rgba(250,0,0,.75)"}
+											{"from":10,"to":12,"role":"low","color":"rgba(250,0,0,.75)"},
+											{"from":12,"to":15,"role":"normal","color":"rgba(0,250,0,.75)"},
+											{"from":15,"to":18,"role":"high","color":"rgba(250,0,0,.75)"}
 										]'
 										data-highlights-width="6"
 										data-bar-progress="true"
@@ -197,9 +198,9 @@
 										data-start-angle="50"
 										data-ticks-angle="260"
 										data-highlights='[
-											{"from":90,"to":98,"color":"rgba(250,0,0,.75)"},
-											{"from":98,"to":102,"color":"rgba(0,250,0,.75)"},
-											{"from":102,"to":110,"color":"rgba(250,0,0,.75)"}
+											{"from":90,"to":98,"role":"low","color":"rgba(250,0,0,.75)"},
+											{"from":98,"to":102,"role":"normal","color":"rgba(0,250,0,.75)"},
+											{"from":102,"to":110,"role":"high","color":"rgba(250,0,0,.75)"}
 										]'
 										data-highlights-width="6"
 										data-bar-progress="true"
@@ -250,11 +251,11 @@
 					<svg id="rpm-smooth" class="rpm-smooth" viewBox="0 0 705 92" preserveAspectRatio="none" aria-hidden="true">
 						<defs>
 							<linearGradient id="rpm-gradient" x1="0" y1="0" x2="1" y2="0">
-								<stop offset="0%" stop-color="#00fa00" />
-								<stop offset="77.8%" stop-color="#00fa00" />
-								<stop offset="88.9%" stop-color="#ffe100" />
-								<stop offset="94.4%" stop-color="#ff9d00" />
-								<stop offset="100%" stop-color="#ff2020" />
+								<stop id="rpm-gradient-low" offset="0%" stop-color="#3388ff" />
+								<stop id="rpm-gradient-normal-start" offset="25%" stop-color="#00fa00" />
+								<stop id="rpm-gradient-normal-end" offset="77.8%" stop-color="#00fa00" />
+								<stop id="rpm-gradient-medium" offset="90%" stop-color="#ffe100" />
+								<stop id="rpm-gradient-high" offset="100%" stop-color="#ff2020" />
 							</linearGradient>
 							<clipPath id="rpm-progress-clip">
 								<rect id="rpm-progress-clip-rect" x="0" y="0" width="0" height="92" />
@@ -262,6 +263,7 @@
 						</defs>
 						<path id="rpm-track" class="rpm-smooth-track" />
 						<path id="rpm-progress" class="rpm-smooth-progress" clip-path="url(#rpm-progress-clip)" />
+						<line id="rpm-peak-marker" class="rpm-smooth-peak" x1="0" x2="0" y1="0" y2="92" />
 						<line id="rpm-marker" class="rpm-smooth-marker" x1="0" x2="0" y1="0" y2="92" />
 					</svg>
 					<div class="rpm-scale" aria-hidden="true">
@@ -279,13 +281,14 @@
 				<svg class="boost-combo-gauge" id="boost-combo-gauge" viewBox="0 0 724 46" role="img" aria-label="Boost pressure">
 					<defs>
 						<linearGradient id="boost-tape-gradient" gradientUnits="userSpaceOnUse" x1="10" y1="0" x2="642" y2="0">
-							<stop offset="0%" stop-color="#00f000" />
+							<stop id="boost-gradient-low" offset="0%" stop-color="#3388ff" />
 							<stop id="boost-gradient-green" offset="55%" stop-color="#00f000" />
 							<stop id="boost-gradient-target" offset="71%" stop-color="#ffe100" />
 							<stop id="boost-gradient-over" offset="85%" stop-color="#ff3030" />
-							<stop offset="100%" stop-color="#ff2020" />
+							<stop id="boost-gradient-high" offset="100%" stop-color="#ff2020" />
 						</linearGradient>
 					</defs>
+					<rect class="boost-outline" x="0.75" y="0.75" width="722.5" height="44.5" rx="4.25" />
 					<rect class="combo-track boost-track" x="10" y="4" width="632" height="22" />
 					<rect id="boost-fill" class="boost-fill" x="10" y="4" width="0" height="22" />
 					<line id="boost-peak-marker" class="boost-peak-marker" x1="10" x2="10" y1="2" y2="28" style="display: none;" />
@@ -346,8 +349,8 @@
 					data-color-plate="rgba(0, 0, 0, 0)"
 					data-border-shadow-width="0"
 						data-highlights='[
-                {"from": 0, "to": 15, "color": "rgba(250, 0, 0, .75)"},
-                {"from": 15, "to": 100, "color": "rgba(0, 250, 0, .75)"}
+                {"from": 0, "to": 15, "role": "low", "color": "rgba(250, 0, 0, .75)"},
+                {"from": 15, "to": 100, "role": "normal", "color": "rgba(0, 250, 0, .75)"}
 						]'
 					data-color-major-ticks="#ff0000"
 					data-color-stroke-ticks="#ffffff"
@@ -395,9 +398,9 @@
 					data-color-plate="rgba(0, 0, 0, 0)"
 					data-border-shadow-width="0"
 						data-highlights='[
-                {"from": 0, "to": 40, "color": "rgba(250, 0, 0, .75)"},
-                {"from": 40, "to": 60, "color": "rgba(250, 250, 0, .75)"},
-                {"from": 60, "to": 100, "color": "rgba(0, 250, 0, .75)"}
+                {"from": 0, "to": 40, "role": "low", "color": "rgba(250, 0, 0, .75)"},
+                {"from": 40, "to": 60, "role": "medium", "color": "rgba(250, 250, 0, .75)"},
+                {"from": 60, "to": 100, "role": "normal", "color": "rgba(0, 250, 0, .75)"}
 						]'
 					data-color-major-ticks="#ff0000"
 					data-color-stroke-ticks="#ffffff"
@@ -446,10 +449,10 @@
 					data-border-shadow-width="0"
 														data-value-box-stroke="0"
 								data-value-box-width="0"data-highlights='[
-						{"from": 40, "to": 80, "color": "rgba(0, 100, 250, .75)"},
-						{"from": 80, "to": 140, "color": "rgba(0, 250, 0, .75)"},
-						{"from": 140, "to": 170, "color": "rgba(255, 176, 0, .75)"},
-						{"from": 170, "to": 200, "color": "rgba(250, 0, 0, .75)"}
+						{"from": 40, "to": 80, "role": "low", "color": "rgba(0, 100, 250, .75)"},
+						{"from": 80, "to": 140, "role": "normal", "color": "rgba(0, 250, 0, .75)"},
+						{"from": 140, "to": 170, "role": "medium", "color": "rgba(255, 176, 0, .75)"},
+						{"from": 170, "to": 200, "role": "high", "color": "rgba(250, 0, 0, .75)"}
 						]'
 					data-color-major-ticks="#ff0000"
 					data-color-stroke-ticks="#ffffff"
@@ -499,10 +502,10 @@
 					data-border-shadow-width="0"
 
 						data-highlights='[
-                {"from": 100, "to": 170, "color": "rgba(0, 0, 250, .75)"},
-                {"from": 170, "to": 210, "color": "rgba(0, 250, 0, .75)"},
-                {"from": 210, "to": 220, "color": "rgba(255, 176, 0, .75)"},
-                {"from": 220, "to": 230, "color": "rgba(250, 0, 0, .75)"}
+                {"from": 100, "to": 170, "role": "low", "color": "rgba(0, 0, 250, .75)"},
+                {"from": 170, "to": 210, "role": "normal", "color": "rgba(0, 250, 0, .75)"},
+                {"from": 210, "to": 220, "role": "medium", "color": "rgba(255, 176, 0, .75)"},
+                {"from": 220, "to": 230, "role": "high", "color": "rgba(250, 0, 0, .75)"}
 						]'
 
 					data-color-major-ticks="#ff0000"
@@ -553,10 +556,10 @@
 					data-border-shadow-width="0"
 
 						data-highlights='[
-                {"from": 100, "to": 140, "color": "rgba(0, 0, 250, .75)"},
-                {"from": 140, "to": 210, "color": "rgba(0, 250, 0, .75)"},
-                {"from": 210, "to": 220, "color": "rgba(255, 176, 0, .75)"},
-                {"from": 220, "to": 230, "color": "rgba(250, 0, 0, .75)"}
+                {"from": 100, "to": 140, "role": "low", "color": "rgba(0, 0, 250, .75)"},
+                {"from": 140, "to": 210, "role": "normal", "color": "rgba(0, 250, 0, .75)"},
+                {"from": 210, "to": 220, "role": "medium", "color": "rgba(255, 176, 0, .75)"},
+                {"from": 220, "to": 230, "role": "high", "color": "rgba(250, 0, 0, .75)"}
 						]'
 
 					data-color-major-ticks="#ff0000"
@@ -595,36 +598,32 @@
 
             </div>
 
-            <div id="main_container2" style="width: 242px; height: 317px; float: left;">
-				<div class="strokeme speed-readout" style="color: #FFFFFF; text-align: center; margin-top:5px; margin-left: auto; margin-right:auto; font-size: 140px; font-family: 'Orbitron';" id="digispeed"></div>
-				<canvas
-					id="aehistogram"
-					width="220"
-					height="28"
-					aria-label="Acceleration enrichment history"
-					style="display: block; width: 220px; height: 28px; margin: 2px auto 0;"
-				></canvas>
-				<canvas
-					id="aebindisplay"
-					width="220"
-					height="68"
-					aria-label="Active acceleration enrichment bins"
-					title="Top: session hit count. Middle: average signed AFR response."
-					style="display: block; width: 220px; height: 68px; margin: 2px auto 0;"
-				></canvas>
-				<div style="display: flex; justify-content: center; gap: 8px; margin-top: 4px;">
-					<div class="strokeme" style="color: #FFFFFF; text-align: center; font-size: 16px; font-family: 'Orbitron';" id="aedisplay"></div>
-					<div class="strokeme" style="color: #FFFFFF; text-align: center; font-size: 16px; font-family: 'Orbitron';" id="eaedisplay"></div>
+            <div id="main_container2" class="speed-panel" style="width: 242px; height: 317px; float: left;">
+				<div class="strokeme speed-readout" style="text-align: center; margin-top:5px; margin-left: auto; margin-right:auto; font-size: 140px; font-family: var(--dashboard-font);" id="digispeed"></div>
+				<div class="speed-panel-meta">
+					<time id="dashboard-clock" class="dashboard-clock" aria-label="Current time">--:--</time>
+					<div id="display-mode-indicator" class="display-mode-indicator speed-panel-mode" role="status" aria-label="Day display mode">
+						<span class="display-mode-symbol" aria-hidden="true"></span>
+						<span id="display-mode-label" class="overlay-text">DAY</span>
+					</div>
+				</div>
+				<div class="speed-panel-drive">
+					<span>GEAR <strong id="gear-indicator">--</strong></span>
+					<span>RANGE <strong id="drive-range-indicator">--</strong></span>
+					<span>DRIVE <strong id="drive-time-indicator">0m</strong></span>
+				</div>
+				<div class="speed-panel-fuel-range">
+					<span>MILES TO EMPTY</span>
+					<strong id="range-display">--</strong>
 				</div>
  			 </div>
   
 			  <div class="bottom-readouts-row">
-					  <div class="strokeme bottom-readout gallons-readout" data-label="TRIP / TANK / LEFT" style="flex: 1; color: #FFFFFF; text-align: center; font-size: 20px; font-family: 'Orbitron';" id="galdisplay">
+					  <div class="strokeme bottom-readout gallons-readout" data-label="TRIP / TANK / LEFT (GAL)" style="flex: 1; text-align: center; font-size: 20px; font-family: var(--dashboard-font);" id="galdisplay">
 						  <span id="galdisplay-value">0.0 / 0.0 / 0.0</span>
-						  <span id="range-display" class="fuel-range">RANGE --</span>
 					  </div>
-				  <div class="strokeme bottom-readout mpg-readout" data-label="CURRENT / TRIP / AVERAGE" style="flex: 1; color: #FFFFFF; text-align: center; font-size: 24px; font-family: 'Orbitron';" id="mpgdisplay"></div>
-				  <div class="strokeme bottom-readout odometer-readout" data-label="ODOMETER / TRIP" style="flex: 1; color: #FFFFFF; text-align: center; font-size: 20px; font-family: 'Orbitron';" id="odometer"></div>
+				  <div class="strokeme bottom-readout mpg-readout" data-label="CURRENT / TRIP / AVERAGE (MPG)" style="flex: 1; text-align: center; font-size: 24px; font-family: var(--dashboard-font);" id="mpgdisplay"></div>
+				  <div class="strokeme bottom-readout odometer-readout" data-label="ODOMETER / TRIP (MI)" style="flex: 1; text-align: center; font-size: 20px; font-family: var(--dashboard-font);" id="odometer"></div>
 		  </div>
 
 
@@ -644,17 +643,18 @@
 </div>
 
 <div style="flex: 1; display: flex; justify-content: center;">
-  <div style="position: relative; display: inline-block;">
-	  <img id="battery" class="icon-warn" src="/assets/images/lucide/zap-off.svg">
-	  <span id="voltdisplay" class="indicator-value-overlay">--</span>
-	  <span class="overlay-text">VOLT</span>
+  <div id="oil-service-indicator" class="oil-service-indicator" style="position: relative; display: inline-block;" role="status" aria-label="Oil change mileage unavailable">
+	  <img id="oil-service" class="oil-service-icon" src="/assets/images/oil-can.svg" alt="">
+	  <span id="oil-service-mileage" class="indicator-value-overlay">--</span>
+	  <span class="overlay-text">OIL</span>
 	</div>
 </div>
 
 <div style="flex: 1; display: flex; justify-content: center;">
   <div style="position: relative; display: inline-block;">
-  	<img id="overheat" class="icon-warn" src="/assets/images/lucide/thermometer.svg">
-	  <span class="overlay-text">HOT</span>
+	  <img id="battery" class="icon-warn" src="/assets/images/lucide/zap-off.svg">
+	  <span id="voltdisplay" class="indicator-value-overlay">--</span>
+	  <span class="overlay-text">VOLT</span>
 	</div>
 </div>
 
@@ -724,10 +724,10 @@
 										data-start-angle="50"
 										data-ticks-angle="260"
  data-highlights='[
-                {"from": 0, "to": 45, "color": "rgba(0, 0, 250, .75)"},
-                {"from": 45, "to": 100, "color": "rgba(0, 250, 0, .75)"},
-                {"from": 100, "to": 180, "color": "rgba(250, 250, 0, .75)"},
-                {"from": 180, "to": 200, "color": "rgba(250, 0, 0, .75)"}
+                {"from": 0, "to": 45, "role": "low", "color": "rgba(0, 0, 250, .75)"},
+                {"from": 45, "to": 100, "role": "normal", "color": "rgba(0, 250, 0, .75)"},
+                {"from": 100, "to": 180, "role": "medium", "color": "rgba(250, 250, 0, .75)"},
+                {"from": 180, "to": 200, "role": "high", "color": "rgba(250, 0, 0, .75)"}
                 ]'
 										data-highlights-width="6"
 										data-bar-progress="true"
@@ -781,10 +781,10 @@
 										data-start-angle="50"
 										data-ticks-angle="260"
  data-highlights='[
-                {"from": 0, "to": 20, "color": "rgba(0, 0, 250, .75)"},
-                {"from": 20, "to": 30, "color": "rgba(0, 250, 0, .75)"},
-                {"from": 30, "to": 50, "color": "rgba(250, 250, 0, .75)"},
-                {"from": 50, "to": 100, "color": "rgba(250, 0, 0, .75)"}
+                {"from": 0, "to": 20, "role": "low", "color": "rgba(0, 0, 250, .75)"},
+                {"from": 20, "to": 30, "role": "normal", "color": "rgba(0, 250, 0, .75)"},
+                {"from": 30, "to": 50, "role": "medium", "color": "rgba(250, 250, 0, .75)"},
+                {"from": 50, "to": 100, "role": "high", "color": "rgba(250, 0, 0, .75)"}
                 ]'
 										data-highlights-width="6"
 										data-bar-progress="true"
@@ -838,11 +838,11 @@
 										data-start-angle="50"
 										data-ticks-angle="260"
  data-highlights='[
-                {"from": -1000, "to": 20, "color": "rgba(0, 100, 250, .75)"},
-                {"from": 20, "to": 100, "color": "rgba(0, 250, 0, .75)"},
-                {"from": 100, "to": 300, "color": "rgba(250, 250, 0, .75)"},
-                {"from": 300, "to": 700, "color": "rgba(255, 176, 0, .75)"},
-                {"from": 700, "to": 1000, "color": "rgba(250, 0, 0, .75)"}
+                {"from": -1000, "to": 20, "role": "low", "color": "rgba(0, 100, 250, .75)"},
+                {"from": 20, "to": 100, "role": "normal", "color": "rgba(0, 250, 0, .75)"},
+                {"from": 100, "to": 300, "role": "medium", "color": "rgba(250, 250, 0, .75)"},
+                {"from": 300, "to": 700, "role": "medium", "color": "rgba(255, 176, 0, .75)"},
+                {"from": 700, "to": 1000, "role": "high", "color": "rgba(250, 0, 0, .75)"}
                 ]'
 										data-highlights-width="6"
 										data-bar-progress="false"
@@ -880,6 +880,62 @@
 
             </div>
 
+            <div id="pw_container" style="width: 150px; height: 150px; float: left;">
+              <div
+                id="pwgauge"
+                data-type="radial-gauge"
+                data-width="150"
+                data-height="150"
+                data-title="INJ PW"
+                data-units="ms"
+                data-min-value="0"
+                data-max-value="15"
+                data-major-ticks="0,3,6,9,12,15"
+                data-value-int="2"
+                data-value-dec="2"
+                data-start-angle="50"
+                data-ticks-angle="260"
+                data-highlights='[
+                  {"from": 0, "to": 3, "role": "low", "color": "rgba(0, 100, 250, .75)"},
+                  {"from": 3, "to": 8, "role": "normal", "color": "rgba(0, 250, 0, .75)"},
+                  {"from": 8, "to": 12, "role": "medium", "color": "rgba(255, 176, 0, .75)"},
+                  {"from": 12, "to": 15, "role": "high", "color": "rgba(250, 0, 0, .75)"}
+                ]'
+                data-highlights-width="6"
+                data-bar-progress="true"
+                data-bar-width="12"
+                data-bar-stroke-width="0"
+                data-bar-begin-circle="false"
+                data-color-bar-progress="#00ff00"
+                data-color-bar="#20242a"
+                data-color-plate="rgba(5, 8, 12, 0.88)"
+                data-borders="false"
+                data-border-shadow-width="0"
+                data-needle="false"
+                data-needle-width="0"
+                data-needle-circle-size="0"
+                data-stroke-ticks="false"
+                data-color-major-ticks="transparent"
+                data-color-minor-ticks="transparent"
+                data-color-stroke-ticks="transparent"
+                data-color-numbers="transparent"
+                data-color-title="#ffb000"
+                data-color-units="#ffb000"
+                data-color-value-text="#ffffff"
+                data-value-text-shadow="false"
+                data-font-value="Orbitron"
+                data-font-value-weight="bold"
+                data-font-title="Arial"
+                data-font-numbers="Arial"
+                data-font-units="Arial"
+                data-font-value-size="68"
+                data-font-title-size="34"
+                data-font-units-size="32"
+                data-value-box-stroke="0"
+                data-color-value-box-background="rgba(0, 0, 0, 0)">
+              </div>
+            </div>
+
             <div id="adv_container" style="width: 150px; height: 150px; float: left;">
 									<div
 										id="advgauge"
@@ -896,10 +952,10 @@
 										data-start-angle="50"
 										data-ticks-angle="260"
  data-highlights='[
-                {"from": 0, "to": 20, "color": "rgba(0, 0, 250, .75)"},
-                {"from": 20, "to": 30, "color": "rgba(0, 250, 0, .75)"},
-                {"from": 30, "to": 35, "color": "rgba(250, 250, 0, .75)"},
-                {"from": 35, "to": 45, "color": "rgba(250, 0, 0, .75)"}
+                {"from": 0, "to": 20, "role": "low", "color": "rgba(0, 0, 250, .75)"},
+                {"from": 20, "to": 30, "role": "normal", "color": "rgba(0, 250, 0, .75)"},
+                {"from": 30, "to": 35, "role": "medium", "color": "rgba(250, 250, 0, .75)"},
+                {"from": 35, "to": 45, "role": "high", "color": "rgba(250, 0, 0, .75)"}
                 ]'
 										data-highlights-width="6"
 										data-bar-progress="true"
@@ -947,8 +1003,121 @@
 
   </div>
 
+  <div id="controller-page-overlay" aria-hidden="true">
+    <section class="controller-page diagnostics-page" data-controller-page="diagnostics" data-dashboard-page="diagnostics" data-dashboard-label="Diagnostics" data-dashboard-icon="scan-line">
+      <div class="diagnostics-heading">
+        <h2>DIAGNOSTICS</h2>
+        <span>LIVE FAULT FINDER</span>
+      </div>
+      <div class="diagnostics-status-strip">
+        <div><span>CAN DATA</span><strong id="controller-diagnostic-can">--</strong></div>
+        <div><span>ENGINE STATE</span><strong id="controller-diagnostic-engine-state">--</strong></div>
+        <div><span>ECU FAULTS</span><strong id="controller-diagnostic-faults">--</strong></div>
+        <div><span>SESSION WARNINGS</span><strong id="controller-diagnostic-warnings">--</strong></div>
+      </div>
+      <div class="controller-page-grid diagnostics-grid">
+        <div><span>ENGINE / VEHICLE</span><strong id="controller-diagnostic-rpm">--</strong><small id="controller-diagnostic-speed">--</small></div>
+        <div><span>COOLANT / INTAKE</span><strong id="controller-diagnostic-clt">--</strong><small id="controller-diagnostic-mat">--</small></div>
+        <div><span>OIL PRESSURE / MIN</span><strong id="controller-diagnostic-oil-pressure">--</strong><small id="controller-diagnostic-oil-temp">--</small></div>
+        <div><span>FUEL PRESSURE / Δ</span><strong id="controller-diagnostic-fuel-pressure">--</strong><small id="controller-diagnostic-fuel-delta">--</small></div>
+        <div><span>AFR / EGO CORRECTION</span><strong id="controller-diagnostic-afr">--</strong><small id="controller-diagnostic-ego">--</small></div>
+        <div><span>MAP / BOOST TARGET</span><strong id="controller-diagnostic-map">--</strong><small id="controller-diagnostic-target">--</small></div>
+        <div><span>TPS / TPSdot</span><strong id="controller-diagnostic-tps">--</strong><small id="controller-diagnostic-tpsdot">--</small></div>
+        <div><span>PULSE WIDTH / ADVANCE</span><strong id="controller-diagnostic-pw">--</strong><small id="controller-diagnostic-advance">--</small></div>
+        <div><span>VOLTAGE / BOOST DUTY</span><strong id="controller-diagnostic-voltage">--</strong><small id="controller-diagnostic-duty">--</small></div>
+        <div><span>BARO / MAP ERROR</span><strong id="controller-diagnostic-baro">--</strong><small id="controller-diagnostic-map-error">--</small></div>
+        <div><span>AE / EAE</span><strong id="controller-diagnostic-ae">--</strong><small id="controller-diagnostic-eae">--</small></div>
+        <div><span>RAW STATUS BYTES</span><strong id="controller-diagnostic-status">--</strong><small>ENGINE · S2 · S6 · S7</small></div>
+      </div>
+    </section>
+    <section class="controller-page" data-controller-page="maintenance" data-dashboard-page="maintenance" data-dashboard-label="Maintenance" data-dashboard-icon="wrench">
+      <h2>MAINTENANCE</h2>
+      <div class="controller-page-grid maintenance-grid">
+        <div><span>MILES SINCE OIL CHANGE</span><strong id="controller-maintenance-oil-miles">--</strong></div>
+        <div><span>UNTIL 3,000 MI SERVICE</span><strong id="controller-maintenance-oil-remaining">--</strong></div>
+        <div><span>TRANSMISSION OIL</span><strong id="controller-maintenance-transmission-miles">--</strong><small id="controller-maintenance-transmission-remaining">--</small></div>
+        <div><span>TRANSFER CASE OIL</span><strong id="controller-maintenance-transferCase-miles">--</strong><small id="controller-maintenance-transferCase-remaining">--</small></div>
+        <div><span>FRONT DIFFERENTIAL OIL</span><strong id="controller-maintenance-frontDifferential-miles">--</strong><small id="controller-maintenance-frontDifferential-remaining">--</small></div>
+        <div><span>REAR DIFFERENTIAL OIL</span><strong id="controller-maintenance-rearDifferential-miles">--</strong><small id="controller-maintenance-rearDifferential-remaining">--</small></div>
+        <div><span>ODOMETER</span><strong id="controller-maintenance-odometer">--</strong></div>
+        <div><span>RESET STORAGE</span><strong id="controller-maintenance-persistence">--</strong></div>
+      </div>
+    </section>
+    <section class="controller-page" data-controller-page="controller-health" data-dashboard-page="controller-health" data-dashboard-label="Controller Health" data-dashboard-icon="heart-pulse">
+      <h2>CONTROLLER HEALTH</h2>
+      <div class="controller-page-grid controller-health-grid">
+        <div><span>STATUS</span><strong id="controller-health-status">--</strong></div>
+        <div><span>OPERATING MODE</span><strong id="controller-health-mode">--</strong></div>
+        <div><span>CAN INTERFACE</span><strong id="controller-health-can-interface">--</strong></div>
+        <div><span>CAN DATA</span><strong id="controller-health-can-fresh">--</strong></div>
+        <div><span>LAST CAN UPDATE</span><strong id="controller-health-can-age">--</strong></div>
+        <div><span>DASHBOARDS</span><strong id="controller-health-dashboards">--</strong></div>
+        <div><span>PI API UPTIME</span><strong id="controller-health-uptime">--</strong></div>
+        <div><span>RESET STORAGE</span><strong id="controller-health-persistence">--</strong></div>
+      </div>
+    </section>
+    <section class="controller-page ae-tuning-page" data-controller-page="ae-tuning" data-dashboard-page="ae-tuning" data-dashboard-label="AE Tuning" data-dashboard-icon="activity">
+      <div class="afr-map-heading">
+        <h2>AE TUNING</h2>
+        <span>TPSdot · ENRICHMENT · AFR RESPONSE</span>
+      </div>
+      <div class="ae-tuning-live">
+        <div id="ae-tpsdot-gauge-slot" class="ae-tpsdot-gauge-slot"></div>
+        <div class="ae-tuning-primary">
+          <div id="aedisplay" class="ae-readout ae-readout-primary"><span class="ae-readout-label">AE</span> <strong class="ae-readout-value">--</strong></div>
+          <div id="eaedisplay" class="ae-readout ae-readout-secondary"><span class="ae-readout-label">EAE1</span> <strong class="ae-readout-value">--</strong></div>
+        </div>
+        <div class="controller-page-grid ae-tuning-metrics">
+          <div><span>TPSdot</span><strong id="ae-tuning-tpsdot">--</strong></div>
+          <div><span>THROTTLE</span><strong id="ae-tuning-tps">--</strong></div>
+          <div><span>AFR</span><strong id="ae-tuning-afr">--</strong></div>
+          <div><span>RPM / MAP</span><strong id="ae-tuning-load">--</strong></div>
+        </div>
+      </div>
+      <div class="ae-tuning-chart">
+        <span>AE HISTORY · MOST RECENT AT RIGHT</span>
+        <canvas id="aehistogram" width="700" height="92" aria-label="Acceleration enrichment history"></canvas>
+      </div>
+      <div class="ae-tuning-chart">
+        <span>AFR RESPONSE · RICH BELOW / LEAN ABOVE 14.7</span>
+        <canvas id="afrhistogram" width="700" height="92" aria-label="AFR response history"></canvas>
+      </div>
+      <div class="ae-tuning-chart">
+        <span>TPSdot HISTORY · CLOSED BELOW / TIP-IN ABOVE ZERO</span>
+        <canvas id="tpsdothistogram" width="700" height="92" aria-label="TPSdot history"></canvas>
+      </div>
+      <div class="ae-tuning-chart ae-bin-chart">
+        <span>TPSdot BINS · HITS / AVERAGE AFR CHANGE</span>
+        <canvas id="aebindisplay" width="700" height="170" aria-label="Acceleration enrichment response by TPSdot bin" title="Top: session hit count. Middle: average signed AFR response."></canvas>
+      </div>
+      <div class="ae-tuning-guidance">
+        <span>GUIDANCE</span>
+        <strong id="ae-tuning-guidance">COLLECTING STABLE EVENTS</strong>
+        <small>Requires 5 stable events per bin. Initial response covers 0–500 ms; EAE tail covers 500–1,500 ms. Positive AFR change is lean. Validate changes at 1× replay or on-road under controlled conditions.</small>
+      </div>
+    </section>
+    <section class="controller-page afr-map-page" data-controller-page="afr-map" data-dashboard-page="afr-map" data-dashboard-label="AFR Error Map" data-dashboard-icon="table-properties">
+      <div class="afr-map-heading">
+        <h2>AFR ERROR MAP</h2>
+        <span>+ LEAN · − RICH · VALUE = AFR − TARGET</span>
+      </div>
+      <div class="afr-map-table-wrap">
+        <table id="afr-map-table" class="operating-map-table" aria-label="Average AFR error by manifold pressure and engine speed"></table>
+      </div>
+    </section>
+    <section class="controller-page afr-map-page" data-controller-page="boost-duty-map" data-dashboard-page="boost-duty-map" data-dashboard-label="Boost Duty Map" data-dashboard-icon="gauge">
+      <div class="afr-map-heading">
+        <h2>BOOST DUTY MAP</h2>
+        <span>RUNNING AVERAGE · LIVE LOG</span>
+      </div>
+      <div class="afr-map-table-wrap">
+        <table id="boost-duty-map-table" class="operating-map-table" aria-label="Average boost duty by manifold pressure and engine speed"></table>
+      </div>
+    </section>
+  </div>
 
-  <div id="drive-summary-overlay" aria-hidden="true">
+
+  <div id="drive-summary-overlay" data-dashboard-page="drive-summary" data-dashboard-label="Drive Summary" data-dashboard-icon="route" aria-hidden="true">
     <div class="drive-summary-panel">
       <div class="drive-summary-title">DRIVE SUMMARY</div>
       <div class="drive-summary-sections">
@@ -1017,21 +1186,45 @@
 
   </body>
   <style>
+    html {
+      --dashboard-brightness: 1;
+      --dashboard-font: Orbitron, sans-serif;
+    }
+
     html,
     body {
-      --amber-label-font: Orbitron, sans-serif;
+      --amber-label-font: var(--dashboard-font);
       --amber-label-size: 11px;
       --amber-label-weight: 600;
       --amber-label-spacing: 0.5px;
+      --dash-accent: #ffb000;
+      --dash-accent-rgb: 255, 176, 0;
+      --dash-value: #ffffff;
+      --dash-low-color: #3388ff;
+      --dash-normal-color: #22dd77;
+      --dash-medium-color: #ffb020;
+      --dash-high-color: #ff3344;
+      --dash-palette-low: #3388ff;
+      --dash-palette-normal: #22dd77;
+      --dash-palette-medium: #ffb020;
+      --dash-palette-high: #ff3344;
+      --dash-icon-filter: brightness(0) saturate(100%) invert(73%) sepia(96%)
+        saturate(1900%) hue-rotate(359deg) brightness(103%) contrast(105%);
+      --dash-indicator-filter: invert(65%) sepia(52%) saturate(1500%)
+        hue-rotate(75deg);
       width: 100%;
       height: 100%;
       padding: 0;
       margin: 0;
       overflow: hidden;
       background-color: #000000;
-      color: #fff;
-      font-family: Arial, Helvetica, sans-serif;
+      color: var(--dash-value);
+      font-family: var(--dashboard-font);
     }
+
+body.display-inverted {
+  filter: invert(1);
+}
 
 .starfield-background {
   position: fixed;
@@ -1041,13 +1234,807 @@
   width: 100%;
   height: 100%;
   pointer-events: none;
+  filter: brightness(var(--dashboard-brightness));
+  transition: filter 300ms ease, opacity 300ms ease;
 }
 
 #full,
 #drive-summary-overlay {
   position: relative;
   z-index: 1;
+  filter: brightness(var(--dashboard-brightness));
+  transition: filter 300ms ease;
 }
+
+#controller-page-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: none;
+  box-sizing: border-box;
+  width: calc(150px + 724px + 150px);
+  padding: 44px 70px;
+  background: rgba(0, 0, 0, 0.95);
+  font-family: var(--dashboard-font);
+  filter: brightness(var(--dashboard-brightness));
+}
+
+body.night-mode {
+  --dash-accent: #ff6238;
+  --dash-accent-rgb: 255, 98, 56;
+  --dash-value: #ffe0c2;
+  --dash-icon-filter: brightness(0) saturate(100%) invert(53%) sepia(91%)
+    saturate(2549%) hue-rotate(336deg) brightness(104%) contrast(101%);
+  --dash-indicator-filter: brightness(0) saturate(100%) invert(59%) sepia(17%)
+    saturate(1505%) hue-rotate(116deg) brightness(91%) contrast(86%);
+}
+
+body.color-scheme-ice {
+  --dash-accent: #55c7ff;
+  --dash-accent-rgb: 85, 199, 255;
+  --dash-value: #e8f8ff;
+  --dash-icon-filter: brightness(0) saturate(100%) invert(76%) sepia(45%)
+    saturate(2135%) hue-rotate(171deg) brightness(103%) contrast(101%);
+  --dash-indicator-filter: brightness(0) saturate(100%) invert(80%) sepia(31%)
+    saturate(1045%) hue-rotate(85deg) brightness(94%) contrast(91%);
+}
+
+body.color-scheme-emerald {
+  --dash-accent: #5ee58c;
+  --dash-accent-rgb: 94, 229, 140;
+  --dash-value: #eafff0;
+  --dash-icon-filter: brightness(0) saturate(100%) invert(80%) sepia(31%)
+    saturate(1045%) hue-rotate(85deg) brightness(94%) contrast(91%);
+  --dash-indicator-filter: brightness(0) saturate(100%) invert(76%) sepia(45%)
+    saturate(2135%) hue-rotate(171deg) brightness(103%) contrast(101%);
+}
+
+body.color-scheme-violet {
+  --dash-accent: #c58aff;
+  --dash-accent-rgb: 197, 138, 255;
+  --dash-value: #f8edff;
+  --dash-icon-filter: brightness(0) saturate(100%) invert(68%) sepia(36%)
+    saturate(1942%) hue-rotate(215deg) brightness(101%) contrast(101%);
+  --dash-indicator-filter: brightness(0) saturate(100%) invert(76%) sepia(45%)
+    saturate(2135%) hue-rotate(171deg) brightness(103%) contrast(101%);
+}
+
+body.color-scheme-crimson {
+  --dash-accent: #ff405c;
+  --dash-accent-rgb: 255, 64, 92;
+  --dash-value: #fff0f3;
+  --dash-icon-filter: brightness(0) saturate(100%) invert(43%) sepia(96%)
+    saturate(3190%) hue-rotate(327deg) brightness(104%) contrast(101%);
+  --dash-indicator-filter: brightness(0) saturate(100%) invert(79%) sepia(62%)
+    saturate(541%) hue-rotate(84deg) brightness(95%) contrast(91%);
+}
+
+body.color-scheme-solar {
+  --dash-accent: #ffd23f;
+  --dash-accent-rgb: 255, 210, 63;
+  --dash-value: #fffbea;
+  --dash-icon-filter: brightness(0) saturate(100%) invert(85%) sepia(83%)
+    saturate(1393%) hue-rotate(328deg) brightness(104%) contrast(101%);
+  --dash-indicator-filter: brightness(0) saturate(100%) invert(73%) sepia(62%)
+    saturate(870%) hue-rotate(74deg) brightness(98%) contrast(91%);
+}
+
+body.color-scheme-monochrome {
+  --dash-accent: #cbd5e1;
+  --dash-accent-rgb: 203, 213, 225;
+  --dash-value: #f8fafc;
+  --dash-icon-filter: brightness(0) saturate(100%) invert(91%) sepia(9%)
+    saturate(451%) hue-rotate(176deg) brightness(95%) contrast(89%);
+  --dash-indicator-filter: brightness(0) saturate(100%) invert(68%) sepia(13%)
+    saturate(579%) hue-rotate(176deg) brightness(91%) contrast(88%);
+}
+
+body.color-scheme-high-contrast {
+  --dash-accent: #00e5ff;
+  --dash-accent-rgb: 0, 229, 255;
+  --dash-value: #ffffff;
+  --dash-icon-filter: brightness(0) saturate(100%) invert(75%) sepia(95%)
+    saturate(2867%) hue-rotate(135deg) brightness(106%) contrast(103%);
+  --dash-indicator-filter: brightness(0) saturate(100%) invert(86%) sepia(93%)
+    saturate(1706%) hue-rotate(35deg) brightness(108%) contrast(106%);
+}
+
+/* Curated open-source palettes, adapted for a black automotive display. */
+body.color-scheme-catppuccin {
+  --dash-accent: #89b4fa;
+  --dash-accent-rgb: 137, 180, 250;
+  --dash-value: #cdd6f4;
+  --dash-icon-filter: brightness(0) saturate(100%) invert(72%) sepia(35%)
+    saturate(1118%) hue-rotate(184deg) brightness(101%) contrast(96%);
+  --dash-indicator-filter: brightness(0) saturate(100%) invert(87%) sepia(16%)
+    saturate(1086%) hue-rotate(61deg) brightness(94%) contrast(91%);
+}
+
+body.color-scheme-dracula {
+  --dash-accent: #bd93f9;
+  --dash-accent-rgb: 189, 147, 249;
+  --dash-value: #f8f8f2;
+  --dash-icon-filter: brightness(0) saturate(100%) invert(69%) sepia(34%)
+    saturate(1858%) hue-rotate(213deg) brightness(100%) contrast(96%);
+  --dash-indicator-filter: brightness(0) saturate(100%) invert(88%) sepia(26%)
+    saturate(1107%) hue-rotate(51deg) brightness(103%) contrast(101%);
+}
+
+body.color-scheme-nord {
+  --dash-accent: #88c0d0;
+  --dash-accent-rgb: 136, 192, 208;
+  --dash-value: #eceff4;
+  --dash-icon-filter: brightness(0) saturate(100%) invert(77%) sepia(14%)
+    saturate(920%) hue-rotate(145deg) brightness(93%) contrast(91%);
+  --dash-indicator-filter: brightness(0) saturate(100%) invert(78%) sepia(25%)
+    saturate(597%) hue-rotate(41deg) brightness(96%) contrast(92%);
+}
+
+body.color-scheme-gruvbox {
+  --dash-accent: #fabd2f;
+  --dash-accent-rgb: 250, 189, 47;
+  --dash-value: #fbf1c7;
+  --dash-icon-filter: brightness(0) saturate(100%) invert(83%) sepia(82%)
+    saturate(1689%) hue-rotate(328deg) brightness(101%) contrast(96%);
+  --dash-indicator-filter: brightness(0) saturate(100%) invert(72%) sepia(18%)
+    saturate(1336%) hue-rotate(37deg) brightness(91%) contrast(85%);
+}
+
+body.color-scheme-solarized {
+  --dash-accent: #2aa198;
+  --dash-accent-rgb: 42, 161, 152;
+  --dash-value: #eee8d5;
+  --dash-icon-filter: brightness(0) saturate(100%) invert(57%) sepia(28%)
+    saturate(1010%) hue-rotate(126deg) brightness(91%) contrast(86%);
+  --dash-indicator-filter: brightness(0) saturate(100%) invert(75%) sepia(89%)
+    saturate(484%) hue-rotate(21deg) brightness(104%) contrast(86%);
+}
+
+/* Selected from the Coolors trending feed on 2026-07-26. */
+body.color-scheme-fiery-ocean {
+  --dash-accent: #c1121f;
+  --dash-accent-rgb: 193, 18, 31;
+  --dash-value: #fdf0d5;
+  --dash-icon-filter: brightness(0) saturate(100%) invert(17%) sepia(98%)
+    saturate(4122%) hue-rotate(349deg) brightness(86%) contrast(103%);
+  --dash-indicator-filter: var(--dash-icon-filter);
+}
+
+body.color-scheme-summer-breeze {
+  --dash-accent: #a8dadc;
+  --dash-accent-rgb: 168, 218, 220;
+  --dash-value: #f1faee;
+  --dash-icon-filter: brightness(0) saturate(100%) invert(88%) sepia(15%)
+    saturate(594%) hue-rotate(132deg) brightness(94%) contrast(94%);
+  --dash-indicator-filter: var(--dash-icon-filter);
+}
+
+body.color-scheme-ocean-sunset {
+  --dash-accent: #0a9396;
+  --dash-accent-rgb: 10, 147, 150;
+  --dash-value: #e9d8a6;
+  --dash-icon-filter: brightness(0) saturate(100%) invert(50%) sepia(69%)
+    saturate(568%) hue-rotate(133deg) brightness(87%) contrast(92%);
+  --dash-indicator-filter: var(--dash-icon-filter);
+}
+
+body.color-scheme-summer-fun {
+  --dash-accent: #ffb703;
+  --dash-accent-rgb: 255, 183, 3;
+  --dash-value: #f1faee;
+  --dash-icon-filter: brightness(0) saturate(100%) invert(76%) sepia(97%)
+    saturate(1638%) hue-rotate(353deg) brightness(102%) contrast(105%);
+  --dash-indicator-filter: var(--dash-icon-filter);
+}
+
+body.color-scheme-vibrant-tones {
+  --dash-accent: #43aa8b;
+  --dash-accent-rgb: 67, 170, 139;
+  --dash-value: #f9c74f;
+  --dash-icon-filter: brightness(0) saturate(100%) invert(61%) sepia(21%)
+    saturate(1131%) hue-rotate(114deg) brightness(92%) contrast(89%);
+  --dash-indicator-filter: var(--dash-icon-filter);
+}
+
+body.color-scheme-sunny-beach {
+  --dash-accent: #2a9d8f;
+  --dash-accent-rgb: 42, 157, 143;
+  --dash-value: #e9c46a;
+  --dash-icon-filter: brightness(0) saturate(100%) invert(56%) sepia(28%)
+    saturate(1001%) hue-rotate(121deg) brightness(89%) contrast(88%);
+  --dash-indicator-filter: var(--dash-icon-filter);
+}
+
+body.color-scheme-fiery-palette {
+  --dash-accent: #e36414;
+  --dash-accent-rgb: 227, 100, 20;
+  --dash-value: #fb8b24;
+  --dash-icon-filter: brightness(0) saturate(100%) invert(47%) sepia(96%)
+    saturate(2477%) hue-rotate(355deg) brightness(94%) contrast(89%);
+  --dash-indicator-filter: var(--dash-icon-filter);
+}
+
+body.color-scheme-pastel-rainbow {
+  --dash-accent: #ff70a6;
+  --dash-accent-rgb: 255, 112, 166;
+  --dash-value: #e9ff70;
+  --dash-icon-filter: brightness(0) saturate(100%) invert(63%) sepia(68%)
+    saturate(1553%) hue-rotate(299deg) brightness(103%) contrast(101%);
+  --dash-indicator-filter: var(--dash-icon-filter);
+}
+
+body.color-scheme-color-fiesta {
+  --dash-accent: #3a86ff;
+  --dash-accent-rgb: 58, 134, 255;
+  --dash-value: #ffbe0b;
+  --dash-icon-filter: brightness(0) saturate(100%) invert(49%) sepia(94%)
+    saturate(2889%) hue-rotate(202deg) brightness(102%) contrast(101%);
+  --dash-indicator-filter: var(--dash-icon-filter);
+}
+
+body.color-scheme-watermelon {
+  --dash-accent: #06d6a0;
+  --dash-accent-rgb: 6, 214, 160;
+  --dash-value: #ffd166;
+  --dash-icon-filter: brightness(0) saturate(100%) invert(70%) sepia(91%)
+    saturate(559%) hue-rotate(108deg) brightness(91%) contrast(95%);
+  --dash-indicator-filter: var(--dash-icon-filter);
+}
+
+body.color-scheme-daybreak {
+  --dash-accent: #7678ed;
+  --dash-accent-rgb: 118, 120, 237;
+  --dash-value: #f7b801;
+  --dash-icon-filter: brightness(0) saturate(100%) invert(53%) sepia(45%)
+    saturate(3066%) hue-rotate(214deg) brightness(96%) contrast(94%);
+  --dash-indicator-filter: var(--dash-icon-filter);
+}
+
+body.color-scheme-neutral-harmony {
+  --dash-accent: #81b29a;
+  --dash-accent-rgb: 129, 178, 154;
+  --dash-value: #f4f1de;
+  --dash-icon-filter: brightness(0) saturate(100%) invert(73%) sepia(16%)
+    saturate(667%) hue-rotate(101deg) brightness(89%) contrast(87%);
+  --dash-indicator-filter: var(--dash-icon-filter);
+}
+
+body[class*="color-scheme-"] .native-gauge-title,
+body[class*="color-scheme-"] .native-gauge-units,
+body[class*="color-scheme-"] .native-linear-units,
+body[class*="color-scheme-"] .rpm-digital span,
+body[class*="color-scheme-"] .rpm-scale,
+body[class*="color-scheme-"] .bar-gauge-label,
+body[class*="color-scheme-"] .speed-readout::after,
+body[class*="color-scheme-"] .bottom-readout::after,
+body[class*="color-scheme-"] .overlay-text,
+body[class*="color-scheme-"] .fuel-range,
+body[class*="color-scheme-"] .controller-page h2,
+body[class*="color-scheme-"] .controller-page-grid span,
+body[class*="color-scheme-"] .drive-summary-title,
+body[class*="color-scheme-"] .drive-summary-section h3,
+body[class*="color-scheme-"] .drive-summary-metrics span,
+body[class*="color-scheme-"] .drive-summary-refill span,
+body[class*="color-scheme-"] .drive-summary-ae span {
+  color: var(--dash-accent);
+  fill: var(--dash-accent);
+}
+
+body[class*="color-scheme-"] .native-gauge-value,
+body[class*="color-scheme-"] .native-linear-value,
+body[class*="color-scheme-"] .rpm-digital strong,
+body[class*="color-scheme-"] .speed-readout,
+body[class*="color-scheme-"] .bottom-readout,
+body[class*="color-scheme-"] .combo-value,
+body[class*="color-scheme-"] .boost-scale,
+body[class*="color-scheme-"] .boost-duty-value,
+body[class*="color-scheme-"] .indicator-value-overlay,
+body[class*="color-scheme-"] .controller-page-grid strong,
+body[class*="color-scheme-"] .drive-summary-metrics strong,
+body[class*="color-scheme-"] .drive-summary-refill strong,
+body[class*="color-scheme-"] .drive-summary-ae strong,
+body[class*="color-scheme-"] .drive-summary-warnings strong {
+  color: var(--dash-value);
+  fill: var(--dash-value);
+}
+
+body[class*="color-scheme-"] .bottom-readout {
+  border-top-color: rgba(var(--dash-accent-rgb), 0.28);
+}
+
+body[class*="color-scheme-"] .controller-page-grid div {
+  border-color: rgba(var(--dash-accent-rgb), 0.34);
+}
+
+body[class*="color-scheme-"] .bar-gauge-icon,
+body[class*="color-scheme-"] .bar-gauge-icon-pair img,
+body[class*="color-scheme-"] .bottom-readout::before {
+  filter: var(--dash-icon-filter);
+}
+
+body[class*="color-scheme-"] .icon,
+body[class*="color-scheme-"] .icon-warn:not(.indicator-active),
+body[class*="color-scheme-"]
+  .oil-service-indicator:not(.service-due-soon):not(.service-overdue)
+  .oil-service-icon {
+  filter: var(--dash-indicator-filter);
+}
+
+body.night-mode #full,
+body.night-mode #controller-page-overlay,
+body.night-mode #drive-summary-overlay {
+  filter: brightness(var(--dashboard-brightness)) saturate(0.82);
+}
+
+body.night-mode .starfield-background {
+  filter: brightness(var(--dashboard-brightness));
+  opacity: 0.78;
+}
+
+body.night-mode .native-gauge-title,
+body.night-mode .native-gauge-units,
+body.night-mode .native-linear-units,
+body.night-mode .rpm-digital span,
+body.night-mode .rpm-scale,
+body.night-mode .bar-gauge-label,
+body.night-mode .speed-readout::after,
+body.night-mode .bottom-readout::after,
+body.night-mode .overlay-text,
+body.night-mode .fuel-range,
+body.night-mode .controller-page h2,
+body.night-mode .controller-page-grid span,
+body.night-mode .drive-summary-title,
+body.night-mode .drive-summary-section h3,
+body.night-mode .drive-summary-metrics span,
+body.night-mode .drive-summary-refill span,
+body.night-mode .drive-summary-ae span {
+  color: var(--dash-accent);
+  fill: var(--dash-accent);
+}
+
+body.night-mode .bottom-readout {
+  border-top-color: rgba(var(--dash-accent-rgb), 0.28);
+}
+
+body.night-mode .controller-page-grid div {
+  border-color: rgba(var(--dash-accent-rgb), 0.34);
+}
+
+body.night-mode .native-gauge-value,
+body.night-mode .native-linear-value,
+body.night-mode .rpm-digital strong,
+body.night-mode .speed-readout,
+body.night-mode .bottom-readout,
+body.night-mode .combo-value,
+body.night-mode .boost-scale,
+body.night-mode .boost-duty-value,
+body.night-mode .indicator-value-overlay,
+body.night-mode .controller-page-grid strong,
+body.night-mode .drive-summary-metrics strong,
+body.night-mode .drive-summary-refill strong,
+body.night-mode .drive-summary-ae strong,
+body.night-mode .drive-summary-warnings strong {
+  color: var(--dash-value);
+  fill: var(--dash-value);
+}
+
+body.night-mode .rpm-digital strong {
+  text-shadow: 0 0 4px var(--rpm-glow-color);
+}
+
+body.night-mode .rpm-smooth-progress {
+  filter: drop-shadow(0 0 4px var(--rpm-glow-color));
+}
+
+body.night-mode .native-gauge-face {
+  fill: rgba(14, 8, 10, 0.94);
+}
+
+body.night-mode .native-gauge-track {
+  stroke: #21171a !important;
+}
+
+body.night-mode .native-linear-track,
+body.night-mode .rpm-smooth-track {
+  fill: #21171a !important;
+}
+
+body.night-mode .combo-track {
+  fill: rgba(var(--dash-accent-rgb), 0.12);
+}
+
+body.night-mode .native-gauge-marker,
+body.night-mode .native-linear-marker,
+body.night-mode .boost-needle,
+body.night-mode .rpm-smooth-marker {
+  stroke: var(--dash-value);
+}
+
+.rpm-smooth-peak {
+  display: none;
+  stroke: var(--gauge-peak-color, var(--dash-low-color));
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+body.night-mode .icon,
+body.night-mode .icon-warn:not(.indicator-active),
+body.night-mode .oil-service-indicator:not(.service-due-soon):not(.service-overdue)
+  .oil-service-icon {
+  filter: var(--dash-indicator-filter);
+}
+
+body.night-mode
+  .oil-service-indicator:not(.service-due-soon):not(.service-overdue)
+  .overlay-text {
+  color: var(--dash-accent);
+}
+
+#controller-page-overlay.visible {
+  display: block;
+}
+
+.controller-page {
+  display: none;
+}
+
+.controller-page.active {
+  display: block;
+}
+
+.controller-page.afr-map-page.active {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.controller-page.ae-tuning-page.active {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 5px;
+}
+
+.ae-tuning-page h2 {
+  margin: 0;
+}
+
+.ae-tuning-live {
+  display: grid;
+  grid-template-columns: 150px 200px 1fr;
+  gap: 12px;
+}
+
+.ae-tpsdot-gauge-slot {
+  width: 150px;
+  height: 150px;
+}
+
+.ae-tpsdot-gauge-slot #tpsdot_container {
+  float: none !important;
+}
+
+.ae-tuning-primary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  border: 1px solid rgba(var(--dash-accent-rgb), 0.38);
+  background: rgba(var(--dash-accent-rgb), 0.06);
+}
+
+.ae-tuning-primary .ae-readout {
+  text-align: center;
+  font-size: 18px;
+}
+
+.ae-tuning-primary .ae-readout-label,
+.ae-tuning-primary .ae-readout-value {
+  display: block;
+}
+
+.ae-tuning-primary .ae-readout-value {
+  margin-top: 5px;
+  font-size: 24px;
+}
+
+.controller-page-grid.ae-tuning-metrics {
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.controller-page-grid.ae-tuning-metrics div {
+  padding: 8px 6px;
+}
+
+.ae-tuning-chart {
+  display: grid;
+  gap: 4px;
+}
+
+.ae-tuning-chart > span,
+.ae-tuning-guidance > span {
+  color: var(--dash-accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.ae-tuning-chart canvas {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid rgba(var(--dash-accent-rgb), 0.42);
+  border-radius: 3px;
+  background: rgba(var(--dash-accent-rgb), 0.045);
+}
+
+.ae-tuning-chart #aehistogram {
+  height: 34px;
+}
+
+.ae-tuning-chart #afrhistogram {
+  height: 42px;
+}
+
+.ae-tuning-chart #tpsdothistogram {
+  height: 34px;
+}
+
+.ae-tuning-chart #aebindisplay {
+  height: 86px;
+}
+
+.ae-tuning-guidance {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 3px 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(var(--dash-accent-rgb), 0.42);
+  background: rgba(var(--dash-accent-rgb), 0.06);
+}
+
+.ae-tuning-guidance strong {
+  color: var(--dash-value);
+  font-size: 15px;
+}
+
+.ae-tuning-guidance small {
+  grid-column: 2;
+  color: var(--dash-accent);
+  font-size: 9px;
+  line-height: 1.35;
+  opacity: 0.78;
+}
+
+.afr-map-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.afr-map-heading > span {
+  color: var(--dash-accent);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+}
+
+.afr-map-table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.operating-map-table {
+  width: 100%;
+  height: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.operating-map-table th,
+.operating-map-table td {
+  border: 1px solid rgba(var(--dash-accent-rgb), 0.35);
+  padding: 3px;
+  text-align: center;
+}
+
+.operating-map-table th {
+  color: var(--dash-accent);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.operating-map-table td {
+  color: var(--dash-value);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.operating-map-table td.empty {
+  color: var(--dash-accent);
+  opacity: 0.35;
+}
+
+.operating-map-table td.afr-error-lean {
+  color: var(--dash-high-color);
+  background: color-mix(in srgb, var(--dash-high-color) 15%, transparent);
+}
+
+.operating-map-table td.afr-error-rich {
+  color: var(--dash-low-color);
+  background: color-mix(in srgb, var(--dash-low-color) 15%, transparent);
+}
+
+.operating-map-table td.afr-error-good {
+  color: var(--dash-normal-color);
+  background: color-mix(in srgb, var(--dash-normal-color) 10%, transparent);
+}
+
+.operating-map-table td small,
+.maintenance-grid small {
+  display: block;
+  margin-top: 4px;
+  color: var(--dash-value);
+  font-size: 9px;
+  font-weight: 400;
+  opacity: 0.72;
+}
+
+.operating-map-table td small {
+  display: block;
+  color: var(--dash-accent);
+  font-size: 8px;
+  font-weight: 400;
+}
+
+.controller-page h2 {
+  margin: 0 0 28px;
+  color: var(--dash-accent);
+  font-size: 30px;
+  letter-spacing: 2px;
+  text-align: center;
+}
+
+.controller-page-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.controller-page-grid.maintenance-grid {
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.controller-page-grid.maintenance-grid div {
+  min-height: 105px;
+  padding: 15px 8px;
+}
+
+.controller-page-grid.controller-health-grid {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.controller-page-grid div {
+  min-height: 120px;
+  box-sizing: border-box;
+  padding: 22px 12px;
+  border: 1px solid rgba(var(--dash-accent-rgb), 0.34);
+  border-radius: 5px;
+  background: rgba(14, 18, 20, 0.92);
+  text-align: center;
+}
+
+.controller-page-grid span {
+  display: block;
+  margin-bottom: 20px;
+  color: var(--dash-accent);
+  font-size: 12px;
+  letter-spacing: 0.7px;
+}
+
+.controller-page-grid strong {
+  color: var(--dash-value);
+  font-size: 24px;
+}
+
+.controller-page-grid strong.health-good {
+  color: var(--dash-normal-color);
+}
+
+.controller-page-grid strong.health-bad {
+  color: var(--dash-high-color);
+}
+
+.controller-page.diagnostics-page.active {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 8px;
+}
+
+.diagnostics-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 12px;
+}
+
+.diagnostics-heading h2 {
+  margin: 0;
+}
+
+.diagnostics-heading > span {
+  color: var(--dash-value);
+  font-size: 11px;
+  letter-spacing: 1.3px;
+  opacity: 0.7;
+}
+
+.diagnostics-status-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.diagnostics-status-strip > div {
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid rgba(var(--dash-accent-rgb), 0.34);
+  background: rgba(14, 18, 20, 0.92);
+  text-align: center;
+}
+
+.diagnostics-status-strip span {
+  display: block;
+  color: var(--dash-accent);
+  font-size: 9px;
+  letter-spacing: 0.8px;
+}
+
+.diagnostics-status-strip strong {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--dash-value);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.controller-page-grid.diagnostics-grid {
+  flex: 1;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.controller-page-grid.diagnostics-grid > div {
+  min-height: 0;
+  padding: 8px 6px;
+}
+
+.controller-page-grid.diagnostics-grid span {
+  margin-bottom: 7px;
+  font-size: 9px;
+}
+
+.controller-page-grid.diagnostics-grid strong {
+  display: block;
+  font-size: 19px;
+}
+
+.controller-page-grid.diagnostics-grid small {
+  display: block;
+  margin-top: 5px;
+  color: var(--dash-value);
+  font-size: 11px;
+  opacity: 0.76;
+}
+
+.diagnostic-good { color: var(--dash-normal-color) !important; }
+.diagnostic-caution { color: var(--dash-medium-color) !important; }
+.diagnostic-bad { color: var(--dash-high-color) !important; }
 
 .boost-mode-banner {
   position: fixed;
@@ -1059,8 +2046,14 @@
   transform: translate(-50%, -50%) scale(0.92);
   border: 2px solid currentColor;
   border-radius: 7px;
-  background: rgba(0, 0, 0, 0.88);
-  font-family: Orbitron, sans-serif;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, currentColor 16%, #050608),
+      #050608 58%,
+      color-mix(in srgb, var(--dash-palette-medium) 10%, #050608)
+    );
+  font-family: var(--dashboard-font);
   font-size: 28px;
   font-weight: 700;
   letter-spacing: 3px;
@@ -1074,19 +2067,44 @@
   opacity: 1;
 }
 .boost-mode-banner.high-boost-banner {
-  color: #ff3030;
-  box-shadow: 0 0 22px rgba(255, 48, 48, 0.55);
+  color: var(--dash-high-color);
+  box-shadow:
+    0 0 22px color-mix(in srgb, var(--dash-high-color) 78%, transparent),
+    inset 0 0 18px color-mix(in srgb, var(--dash-palette-medium) 12%, transparent);
 }
 .boost-mode-banner.low-boost-banner {
-  color: #00f000;
-  box-shadow: 0 0 22px rgba(0, 240, 0, 0.42);
+  color: var(--dash-normal-color);
+  box-shadow:
+    0 0 22px color-mix(in srgb, var(--dash-normal-color) 78%, transparent),
+    inset 0 0 18px color-mix(in srgb, var(--dash-palette-low) 12%, transparent);
+}
+.engine-alert-banner {
+  color: var(--dash-high-color);
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--dash-high-color) 22%, #050608),
+      #050608 52%,
+      color-mix(in srgb, var(--dash-medium-color) 16%, #050608)
+    );
+  box-shadow:
+    0 0 28px color-mix(in srgb, var(--dash-high-color) 82%, transparent),
+    inset 0 0 22px color-mix(in srgb, var(--dash-medium-color) 18%, transparent);
+  animation: engine-alert-pulse 0.55s ease-in-out infinite alternate;
 }
 
 button,
 input,
 select,
 textarea {
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--dashboard-font);
+}
+
+body[data-dashboard-font],
+body[data-dashboard-font] *,
+body[data-dashboard-font] *::before,
+body[data-dashboard-font] *::after {
+  font-family: var(--dashboard-font) !important;
 }
 
 /* Keep the display face on primary readings; use a simpler face for the
@@ -1104,7 +2122,7 @@ textarea {
 .drive-summary-refill strong,
 .drive-summary-ae strong,
 .drive-summary-warnings strong {
-  font-family: Orbitron, sans-serif;
+  font-family: var(--dashboard-font);
   font-weight: 700;
 }
 
@@ -1129,8 +2147,11 @@ textarea {
   stroke-linecap: round;
 }
 .native-gauge-progress { transition: stroke 120ms linear; }
-.native-gauge-marker { stroke: #fff; stroke-width: 2.5; }
-.native-gauge-peak { stroke: #00d9ff; stroke-width: 2; }
+.native-gauge-marker { stroke: var(--dash-value); stroke-width: 2.5; }
+.native-gauge-peak {
+  stroke: var(--gauge-peak-color, #00d9ff);
+  stroke-width: 2;
+}
 .native-gauge-title,
 .native-gauge-value,
 .native-gauge-units {
@@ -1142,14 +2163,14 @@ textarea {
 }
 .native-gauge-title,
 .native-gauge-units {
-  fill: #ffb000;
-  font-family: Arial, Helvetica, sans-serif;
+  fill: var(--dash-accent);
+  font-family: var(--dashboard-font);
   font-weight: 600;
 }
 .native-gauge-title { font-size: 13px; letter-spacing: 0.35px; }
 .native-gauge-value {
-  fill: #fff;
-  font-family: Orbitron, sans-serif;
+  fill: var(--dash-value);
+  font-family: var(--dashboard-font);
   font-size: 33px;
   font-weight: 700;
 }
@@ -1168,8 +2189,11 @@ textarea {
 }
 .native-linear-track { fill: rgba(35, 35, 35, 0.9); }
 .native-linear-fill { transition: fill 120ms linear; }
-.native-linear-marker { stroke: #fff; stroke-width: 2.5; }
-.native-linear-peak { stroke: #00d9ff; stroke-width: 2; }
+.native-linear-marker { stroke: var(--dash-value); stroke-width: 2.5; }
+.native-linear-peak {
+  stroke: var(--gauge-peak-color, #00d9ff);
+  stroke-width: 2;
+}
 .native-linear-value,
 .native-linear-units {
   text-anchor: middle;
@@ -1179,19 +2203,23 @@ textarea {
   stroke-linejoin: round;
 }
 .native-linear-value {
-  fill: #fff;
-  font-family: Orbitron, sans-serif;
+  fill: var(--dash-value);
+  font-family: var(--dashboard-font);
   font-size: 30px;
   font-weight: 700;
 }
 .native-linear-units {
-  fill: #ffb000;
-  font-family: Arial, Helvetica, sans-serif;
+  fill: var(--dash-accent);
+  font-family: var(--dashboard-font);
   font-size: 12px;
   font-weight: 600;
 }
 
 .rpm-segment-gauge {
+  --tach-low-color: #3388ff;
+  --tach-normal-color: #00fa00;
+  --tach-medium-color: #ffe100;
+  --tach-high-color: #ff2020;
   --rpm-glow-color: rgba(0, 250, 0, 0);
   --rpm-glow-blur: 0px;
   box-sizing: border-box;
@@ -1199,7 +2227,7 @@ textarea {
   width: 725px;
   height: 120px;
   padding: 7px 10px 4px;
-  font-family: Orbitron, sans-serif;
+  font-family: var(--dashboard-font);
   isolation: isolate;
 }
 
@@ -1211,7 +2239,7 @@ textarea {
   display: flex;
   align-items: baseline;
   gap: 6px;
-  color: #fff;
+  color: var(--dash-value);
   pointer-events: none;
 }
 
@@ -1226,7 +2254,7 @@ textarea {
 }
 
 .rpm-digital span {
-  color: #ffb000;
+  color: var(--dash-accent);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.25px;
@@ -1247,7 +2275,7 @@ textarea {
     drop-shadow(0 0 3px var(--rpm-glow-color));
   transition: filter 100ms linear;
 }
-.rpm-smooth-marker { stroke: #fff; stroke-width: 2; opacity: 0; }
+.rpm-smooth-marker { stroke: var(--dash-value); stroke-width: 2; opacity: 0; }
 .rpm-smooth-marker.active { opacity: 1; }
 #rpm-progress-clip-rect,
 .rpm-smooth-marker { transition: all 80ms linear; }
@@ -1255,7 +2283,7 @@ textarea {
   position: relative;
   height: 12px;
   padding-top: 3px;
-  color: #ffb000;
+  color: var(--dash-accent);
   font-size: 10px;
   letter-spacing: 1px;
   text-shadow: none;
@@ -1285,7 +2313,7 @@ textarea {
   bottom: 11px;
   z-index: 2;
   transform: translateX(-50%);
-  color: #ffb000;
+  color: var(--dash-accent);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.25px;
@@ -1321,44 +2349,48 @@ textarea {
   height: 46px;
   margin-top: 0;
   box-sizing: border-box;
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  border: 0;
   border-radius: 5px;
-  background: rgba(0, 0, 0, 0.18);
-  font-family: Orbitron, sans-serif;
+  background: rgba(var(--dash-accent-rgb), 0.06);
+  font-family: var(--dashboard-font);
 }
 
-.combo-track { fill: rgba(35, 35, 35, 0.9); }
-.boost-track { stroke: rgba(255, 255, 255, 0.18); stroke-width: 1; }
+.combo-track { fill: rgba(var(--dash-accent-rgb), 0.12); }
+.boost-outline {
+  fill: none;
+  stroke: var(--dash-accent);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.boost-track { stroke: rgba(var(--dash-accent-rgb), 0.38); stroke-width: 1; }
 .boost-fill { fill: url(#boost-tape-gradient); }
 .boost-scale {
-  fill: #fff;
+  fill: var(--dash-value);
   font-size: 9px;
   font-weight: 600;
   text-anchor: middle;
 }
-.boost-needle { stroke: #fff; stroke-width: 2; }
-.boost-peak-marker { stroke: #00d9ff; stroke-width: 2; }
-.boost-target-marker { stroke: #ffb000; stroke-width: 2; }
-.boost-combo-gauge.low-boost-mode {
-  border-color: rgba(0, 240, 0, 0.5);
+.boost-needle { stroke: var(--dash-value); stroke-width: 2; }
+.boost-peak-marker { stroke: var(--dash-low-color); stroke-width: 2; }
+.boost-target-marker { stroke: var(--dash-medium-color); stroke-width: 2; }
+.boost-combo-gauge.low-boost-mode .boost-target-marker {
+  stroke: var(--boost-target-low-color, #00f000);
 }
-.boost-combo-gauge.low-boost-mode .boost-target-marker { stroke: #00f000; }
-.boost-combo-gauge.high-boost-mode {
-  border-color: rgba(255, 48, 48, 0.7);
+.boost-combo-gauge.high-boost-mode .boost-target-marker {
+  stroke: var(--boost-target-high-color, #ff3030);
 }
-.boost-combo-gauge.high-boost-mode .boost-target-marker { stroke: #ff3030; }
-.combo-value { fill: #fff; font-size: 9px; font-weight: 700; text-anchor: middle; }
+.combo-value { fill: var(--dash-value); font-size: 9px; font-weight: 700; text-anchor: middle; }
 .boost-value { font-size: 13px; }
-.boost-unit { fill: #ffb000; font-size: 10px; font-weight: 700; text-anchor: middle; }
-.boost-duty-track { fill: rgba(65, 65, 65, 0.8); }
-.boost-duty-fill { fill: #00d9ff; }
+.boost-unit { fill: var(--dash-accent); font-size: 10px; font-weight: 700; text-anchor: middle; }
+.boost-duty-track { fill: rgba(var(--dash-accent-rgb), 0.22); }
+.boost-duty-fill { fill: var(--boost-duty-color, #00d9ff); }
 .boost-duty-value {
-  font-family: Orbitron, sans-serif;
+  font-family: var(--dashboard-font);
   font-size: 10px;
   font-weight: 700;
   text-anchor: middle;
 }
-.boost-duty-value { fill: #fff; }
+.boost-duty-value { fill: var(--dash-value); }
 
 #main_container1 {
   display: flex;
@@ -1372,7 +2404,7 @@ textarea {
 #oiltempgauge { order: 5; }
 
 .strokeme {
-  color: white;
+  color: var(--dash-value);
   text-shadow: none;
 
 }
@@ -1389,7 +2421,7 @@ textarea {
   left: 50%;
   bottom: -13px;
   transform: translateX(-50%);
-  color: #ffb000;
+  color: var(--dash-accent);
   font-size: 12px;
   font-weight: bold;
   letter-spacing: 2px;
@@ -1406,7 +2438,7 @@ textarea {
   gap: 6px;
   white-space: nowrap;
   padding: 1px 7px 15px;
-  color: #fff;
+  color: var(--dash-value);
   font-variant-numeric: tabular-nums;
   line-height: 1;
   background: linear-gradient(
@@ -1414,7 +2446,7 @@ textarea {
     rgba(255, 255, 255, 0.045),
     rgba(255, 255, 255, 0.012)
   );
-  border-top: 1px solid rgba(255, 176, 0, 0.2);
+  border-top: 1px solid rgba(var(--dash-accent-rgb), 0.2);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
@@ -1453,7 +2485,7 @@ textarea {
   left: 50%;
   bottom: 3px;
   transform: translateX(-50%);
-  color: #ffb000;
+  color: var(--dash-accent);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.9px;
@@ -1481,7 +2513,7 @@ textarea {
 .drive-summary-metrics span,
 .drive-summary-refill span,
 .drive-summary-ae span {
-  font-family: var(--amber-label-font);
+  font-family: var(--dashboard-font);
   font-size: var(--amber-label-size);
   font-weight: var(--amber-label-weight);
   letter-spacing: var(--amber-label-spacing);
@@ -1496,8 +2528,8 @@ textarea {
   position: absolute;
   right: 8px;
   bottom: 3px;
-  color: #ffb000;
-  font-family: var(--amber-label-font);
+  color: var(--dash-accent);
+  font-family: var(--dashboard-font);
   font-size: 9px;
   font-weight: var(--amber-label-weight);
   letter-spacing: 0.35px;
@@ -1515,6 +2547,83 @@ textarea {
   text-shadow: 0 1px 2px #000, 0 0 7px rgba(0, 0, 0, 0.95);
 }
 
+.ae-readout-label {
+  color: var(--dash-accent);
+}
+
+.speed-panel {
+  position: relative;
+}
+
+.dashboard-clock {
+  color: var(--dash-accent);
+  font-family: var(--dashboard-font);
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  line-height: 1;
+  opacity: 0.72;
+  text-shadow: 0 1px 3px #000, 0 0 5px rgba(var(--dash-accent-rgb), 0.28);
+}
+
+.speed-panel-meta {
+  display: flex;
+  min-height: 42px;
+  margin-top: -8px;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.speed-panel-drive {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  color: var(--dash-accent);
+  font-family: var(--dashboard-font);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.speed-panel-drive strong {
+  margin-left: 3px;
+  color: var(--dash-value);
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+}
+
+.speed-panel-fuel-range {
+  margin-top: 4px;
+  color: var(--dash-accent);
+  font-family: var(--dashboard-font);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.7px;
+  text-align: center;
+}
+
+.speed-panel-fuel-range strong {
+  margin-left: 4px;
+  color: var(--dash-value);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ae-readout-value {
+  color: var(--dash-value);
+}
+
+#aehistogram,
+#aebindisplay {
+  box-sizing: border-box;
+  border: 1px solid rgba(var(--dash-accent-rgb), 0.42);
+  border-radius: 3px;
+  background: rgba(var(--dash-accent-rgb), 0.045);
+}
+
 
 .icon-warn {
   height: 40px;
@@ -1529,13 +2638,90 @@ textarea {
 }
 
 .icon-warn.indicator-active ~ .overlay-text {
-  color: #ff4a42;
+  color: var(--dash-high-color);
   animation: warning-label-pulse 1.1s ease-in-out infinite alternate;
+}
+
+.display-mode-indicator {
+  position: relative;
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+}
+
+.display-mode-symbol {
+  display: block;
+  box-sizing: border-box;
+  width: 21px;
+  height: 21px;
+  border: 2px solid var(--dash-accent);
+  border-radius: 50%;
+  background: rgba(var(--dash-accent-rgb), 0.52);
+  box-shadow: 0 0 8px rgba(var(--dash-accent-rgb), 0.55);
+  transition: background 250ms ease, box-shadow 250ms ease,
+    transform 250ms ease;
+}
+
+.display-mode-indicator[data-mode="night"] .display-mode-symbol {
+  border-color: var(--dash-value);
+  background: transparent;
+  box-shadow: inset 7px -4px 0 -1px var(--dash-value);
+  transform: rotate(-18deg);
+}
+
+.display-mode-indicator .overlay-text {
+  color: var(--dash-accent);
+}
+
+.display-mode-indicator.speed-panel-mode {
+  width: auto;
+  gap: 6px;
+}
+
+.display-mode-indicator.speed-panel-mode .display-mode-symbol {
+  width: 18px;
+  height: 18px;
+}
+
+.display-mode-indicator.speed-panel-mode .overlay-text {
+  position: static;
+  transform: none;
+  font-size: 10px;
+}
+
+.oil-service-icon {
+  width: 40px;
+  height: 40px;
+  opacity: 0.62;
+  filter: invert(65%) sepia(52%) saturate(1500%) hue-rotate(75deg);
+}
+
+.oil-service-indicator.service-due-soon .oil-service-icon {
+  opacity: 1;
+  filter: brightness(0) saturate(100%) invert(73%) sepia(96%)
+    saturate(1900%) hue-rotate(359deg) brightness(103%) contrast(105%);
+}
+
+.oil-service-indicator.service-due-soon .overlay-text,
+.oil-service-indicator.service-due-soon .indicator-value-overlay {
+  color: var(--dash-medium-color);
+}
+
+.oil-service-indicator.service-overdue .oil-service-icon {
+  opacity: 1;
+  animation: warning-pulse 1.1s ease-in-out infinite alternate;
+}
+
+.oil-service-indicator.service-overdue .overlay-text,
+.oil-service-indicator.service-overdue .indicator-value-overlay {
+  color: var(--dash-high-color);
 }
 
 #oilpsi_container.oil-pressure-warning canvas,
 #oilpsi_container.oil-pressure-warning .native-radial-gauge {
-  filter: drop-shadow(0 0 7px rgba(255, 0, 0, 0.95));
+  filter: drop-shadow(0 0 7px var(--dash-high-color));
 }
 
 #afr_container { position: relative; }
@@ -1551,8 +2737,8 @@ textarea {
   transform: translateX(-50%);
   padding: 2px 7px;
   border-radius: 3px;
-  background: #f00;
-  color: #fff;
+  background: var(--dash-high-color);
+  color: var(--dash-value);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.5px;
@@ -1565,8 +2751,9 @@ body.afr-warning-active::after {
   inset: 0;
   z-index: 9998;
   box-sizing: border-box;
-  border: 10px solid rgba(255, 0, 0, 0.9);
-  box-shadow: inset 0 0 34px rgba(255, 0, 0, 0.72);
+  border: 10px solid color-mix(in srgb, var(--dash-high-color) 90%, transparent);
+  box-shadow: inset 0 0 34px
+    color-mix(in srgb, var(--dash-high-color) 72%, transparent);
   pointer-events: none;
   animation: afr-screen-alert 0.42s ease-in-out infinite alternate;
 }
@@ -1574,26 +2761,49 @@ body.afr-warning-active::after {
 .sensor-fault canvas,
 .sensor-fault .native-radial-gauge,
 .sensor-fault .native-linear-gauge {
-  filter: drop-shadow(0 0 5px rgba(255, 176, 0, 0.9));
+  filter: drop-shadow(0 0 5px var(--dash-medium-color));
 }
 
 @keyframes warning-pulse {
-  from { filter: invert(14%) sepia(94%) saturate(7481%) hue-rotate(1deg) brightness(94%) contrast(119%); }
-  to { filter: invert(14%) sepia(94%) saturate(7481%) hue-rotate(1deg) brightness(145%) contrast(119%) drop-shadow(0 0 5px #f00); }
+  from {
+    filter: var(--dash-indicator-filter)
+      drop-shadow(0 0 2px color-mix(in srgb, var(--dash-high-color) 55%, transparent));
+  }
+  to {
+    filter: var(--dash-indicator-filter)
+      drop-shadow(0 0 8px var(--dash-high-color));
+  }
 }
 
 @keyframes warning-label-pulse {
-  from { color: #ff4a42; }
-  to { color: #fff; }
+  from { color: var(--dash-high-color); }
+  to { color: var(--dash-value); }
+}
+
+@keyframes engine-alert-pulse {
+  from { filter: brightness(0.9); }
+  to { filter: brightness(1.35); }
 }
 
 @keyframes afr-gauge-alert {
-  from { filter: drop-shadow(0 0 5px rgba(255, 0, 0, 0.8)); }
-  to { filter: drop-shadow(0 0 16px #f00) brightness(1.5); }
+  from {
+    filter: drop-shadow(
+      0 0 5px color-mix(in srgb, var(--dash-high-color) 80%, transparent)
+    );
+  }
+  to {
+    filter: drop-shadow(0 0 16px var(--dash-high-color)) brightness(1.5);
+  }
 }
 @keyframes afr-label-alert {
-  from { background: #8f0000; transform: translateX(-50%) scale(1); }
-  to { background: #ff2020; transform: translateX(-50%) scale(1.08); }
+  from {
+    background: color-mix(in srgb, var(--dash-high-color) 58%, #000);
+    transform: translateX(-50%) scale(1);
+  }
+  to {
+    background: var(--dash-high-color);
+    transform: translateX(-50%) scale(1.08);
+  }
 }
 @keyframes afr-screen-alert {
   from { opacity: 0.38; }
@@ -1615,7 +2825,7 @@ body.afr-warning-active::after {
 	top: 50px;
   transform: translate(-50%, -50%);
   
-  color: #ffb000;
+  color: var(--dash-accent);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.25px;
@@ -1632,8 +2842,8 @@ body.afr-warning-active::after {
   left: 50%;
   top: 20px;
   transform: translate(-50%, -50%);
-  color: #fff;
-  font-family: Orbitron, sans-serif;
+  color: var(--dash-value);
+  font-family: var(--dashboard-font);
   font-size: 15px;
   font-weight: bold;
   line-height: 1;
@@ -1663,8 +2873,8 @@ body.afr-warning-active::after {
   align-items: stretch;
   justify-content: flex-start;
   background: rgba(0, 0, 0, 0.94);
-  color: #fff;
-  font-family: Arial, Helvetica, sans-serif;
+  color: var(--dash-value);
+  font-family: var(--dashboard-font);
 }
 
 #drive-summary-overlay.visible { display: flex; }
@@ -1676,7 +2886,7 @@ body.afr-warning-active::after {
   display: flex;
   flex-direction: column;
 }
-.drive-summary-title { text-align: center; font-size: 28px; color: #ffb000; margin-bottom: 8px; }
+.drive-summary-title { text-align: center; font-size: 28px; color: var(--dash-accent); margin-bottom: 8px; }
 .drive-summary-sections {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -1686,14 +2896,14 @@ body.afr-warning-active::after {
   min-height: 0;
 }
 .drive-summary-section { border: 1px solid #4a4a4a; background: rgba(8, 8, 8, 0.96); padding: 7px; }
-.drive-summary-section h3 { margin: 0 0 6px; color: #ffc247; text-align: center; font-size: 15px; font-weight: 600; letter-spacing: 0.3px; }
+.drive-summary-section h3 { margin: 0 0 6px; color: var(--dash-accent); text-align: center; font-size: 15px; font-weight: 600; letter-spacing: 0.3px; }
 .drive-summary-metrics { display: grid; gap: 5px; }
 .drive-summary-metrics.three-up { grid-template-columns: repeat(3, 1fr); }
 .drive-summary-metrics.four-up { grid-template-columns: repeat(4, 1fr); }
 .drive-summary-metrics.five-up { grid-template-columns: repeat(5, 1fr); }
 .drive-summary-metrics div { background: #151515; padding: 7px 3px; text-align: center; min-width: 0; }
-.drive-summary-metrics span { display: block; color: #ffb000; font-size: 12px; font-weight: 600; letter-spacing: 0.2px; margin-bottom: 4px; white-space: nowrap; }
-.drive-summary-metrics strong { color: #fff; font-size: 18px; white-space: nowrap; }
+.drive-summary-metrics span { display: block; color: var(--dash-accent); font-size: 12px; font-weight: 600; letter-spacing: 0.2px; margin-bottom: 4px; white-space: nowrap; }
+.drive-summary-metrics strong { color: var(--dash-value); font-size: 18px; white-space: nowrap; }
 .drive-summary-refill {
   display: none;
   grid-template-columns: repeat(3, 1fr);
@@ -1702,19 +2912,96 @@ body.afr-warning-active::after {
 }
 .drive-summary-refill.visible { display: grid; }
 .drive-summary-refill div { background: #151515; padding: 5px 3px; text-align: center; }
-.drive-summary-refill span { display: block; color: #ffb000; font-size: 11px; font-weight: 600; letter-spacing: 0.2px; margin-bottom: 3px; }
-.drive-summary-refill strong { color: #fff; font-size: 15px; white-space: nowrap; }
+.drive-summary-refill span { display: block; color: var(--dash-accent); font-size: 11px; font-weight: 600; letter-spacing: 0.2px; margin-bottom: 3px; }
+.drive-summary-refill strong { color: var(--dash-value); font-size: 15px; white-space: nowrap; }
 .drive-summary-ae-section { margin-top: 8px; flex: 0 0 auto; }
 .drive-summary-ae { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .drive-summary-ae div { padding: 7px 4px; text-align: center; background: #101010; }
-.drive-summary-ae span { display: block; color: #ffb000; font-size: 12px; font-weight: 600; letter-spacing: 0.2px; }
+.drive-summary-ae span { display: block; color: var(--dash-accent); font-size: 12px; font-weight: 600; letter-spacing: 0.2px; }
 .drive-summary-ae strong { display: block; margin-top: 4px; font-size: 18px; }
 .drive-summary-warning-section { margin-top: 8px; flex: 0 0 auto; }
 .drive-summary-warnings { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .drive-summary-warnings div { padding: 6px 4px; text-align: center; background: #101010; }
-.drive-summary-warnings span { display: block; color: #ff6868; font-size: 12px; font-weight: 600; letter-spacing: 0.2px; }
-.drive-summary-warnings strong { display: block; margin-top: 3px; color: #fff; font-size: 13px; }
-.drive-summary-note { text-align: center; color: #c9c9c9; margin-top: 7px; font-size: 12px; letter-spacing: 0.15px; }
+.drive-summary-warnings span { display: block; color: var(--dash-high-color); font-size: 12px; font-weight: 600; letter-spacing: 0.2px; }
+.drive-summary-warnings strong { display: block; margin-top: 3px; color: var(--dash-value); font-size: 13px; }
+.drive-summary-note { text-align: center; color: var(--dash-value); opacity: 0.78; margin-top: 7px; font-size: 12px; letter-spacing: 0.15px; }
+
+/* Use the full theme palette beyond gauge warning bands. Low-opacity color
+   keeps the black automotive display while giving each palette a distinct
+   surface and outline identity. */
+#controller-page-overlay {
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--dash-palette-low) 7%, #000),
+      #000 45%,
+      color-mix(in srgb, var(--dash-palette-normal) 5%, #000)
+    );
+}
+
+.controller-page-grid > div:nth-child(4n + 1),
+.diagnostics-status-strip > div:nth-child(4n + 1),
+.drive-summary-metrics > div:nth-child(4n + 1) {
+  border-color: color-mix(in srgb, var(--dash-palette-low) 55%, transparent);
+  background: color-mix(in srgb, var(--dash-palette-low) 8%, #080a0c);
+}
+
+.controller-page-grid > div:nth-child(4n + 2),
+.diagnostics-status-strip > div:nth-child(4n + 2),
+.drive-summary-metrics > div:nth-child(4n + 2) {
+  border-color: color-mix(in srgb, var(--dash-palette-normal) 52%, transparent);
+  background: color-mix(in srgb, var(--dash-palette-normal) 7%, #080a0c);
+}
+
+.controller-page-grid > div:nth-child(4n + 3),
+.diagnostics-status-strip > div:nth-child(4n + 3),
+.drive-summary-metrics > div:nth-child(4n + 3) {
+  border-color: color-mix(in srgb, var(--dash-palette-medium) 52%, transparent);
+  background: color-mix(in srgb, var(--dash-palette-medium) 7%, #080a0c);
+}
+
+.controller-page-grid > div:nth-child(4n),
+.diagnostics-status-strip > div:nth-child(4n),
+.drive-summary-metrics > div:nth-child(4n) {
+  border-color: color-mix(in srgb, var(--dash-palette-high) 48%, transparent);
+  background: color-mix(in srgb, var(--dash-palette-high) 6%, #080a0c);
+}
+
+.bottom-readouts-row > :nth-child(1) {
+  border-top-color: color-mix(in srgb, var(--dash-palette-low) 58%, transparent);
+}
+
+.bottom-readouts-row > :nth-child(2) {
+  border-top-color: color-mix(in srgb, var(--dash-palette-normal) 58%, transparent);
+}
+
+.bottom-readouts-row > :nth-child(3) {
+  border-top-color: color-mix(in srgb, var(--dash-palette-medium) 58%, transparent);
+}
+
+.ae-tuning-chart:nth-of-type(1) canvas,
+.operating-map-table th:first-child {
+  border-color: color-mix(in srgb, var(--dash-palette-low) 58%, transparent);
+}
+
+.ae-tuning-chart:nth-of-type(2) canvas {
+  border-color: color-mix(in srgb, var(--dash-palette-normal) 58%, transparent);
+}
+
+.ae-tuning-chart:nth-of-type(3) canvas {
+  border-color: color-mix(in srgb, var(--dash-palette-medium) 58%, transparent);
+}
+
+.rpm-segment-gauge,
+.boost-combo-gauge {
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--dash-palette-low) 6%, transparent),
+      transparent 38%,
+      color-mix(in srgb, var(--dash-palette-medium) 5%, transparent)
+    );
+}
 
 
 

@@ -62,8 +62,8 @@ export default {
         elGalValue.textContent = `${g1.toFixed(1)} / ${tankGallonsUsed.toFixed(1)} / ${remainingGallons.toFixed(1)}`;
       }
       if (elRange) elRange.textContent = rangeMpg > 0
-        ? `RANGE ${Math.round(estimatedRange)} MI`
-        : "RANGE --";
+        ? String(Math.round(estimatedRange))
+        : "--";
     }
 
     // ----- Fuel gauge -----

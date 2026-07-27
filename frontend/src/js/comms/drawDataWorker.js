@@ -41,6 +41,16 @@ function ensureWS() {
         if (message.type === "analysis_sample") {
           postMessage({ msg: "analysis_sample", sample: message });
         }
+        if (message.type === "controller_state") {
+          postMessage({ msg: "controller_state", state: message.state });
+        }
+        if (message.type === "controller_event") {
+          postMessage({
+            msg: "controller_event",
+            event: message.event,
+            detail: message.detail
+          });
+        }
         return;
       }
       const view = new DataView(evt.data);
